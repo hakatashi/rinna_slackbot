@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "rinna-slackbot"
+version = "0.1.0"
+description = ""
+authors = ["Koki Takahashi <hakatasiloving@gmail.com>"]
+license = "Apache Licence 2.0"
+readme = "README.md"
+packages = [{include = "rinna_slackbot"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+torch = "1.12.1"
+slack-sdk = "^3.19.4"
+regex = "^2022.10.31"
+python-dotenv = "^0.21.0"
+google-api-python-client = "^2.66.0"
+transformers = "^4.24.0"
+firebase-admin = "^6.0.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
