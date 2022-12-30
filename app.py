@@ -1,4 +1,5 @@
 import pystray
+import subprocess
 from PIL import Image, ImageDraw
 
 def create_image(width, height, color1, color2):
@@ -13,14 +14,34 @@ def create_image(width, height, color1, color2):
 
     return image
 
+mode = "GPU"
+
+stdout_stream = open('stdout.log', 'a', encoding='utf-8')
+stderr_stream = open('stderr.log', 'a', encoding='utf-8')
+
+p = subprocess.Popen(['python', 'worker.py', 'GPU'], stdout=stdout_stream, stderr=stderr_stream)
 
 icon = pystray.Icon(
-    'test name',
+    'りんな',
     icon=create_image(64, 64, 'black', 'white'))
 
-icon.menu = pystray.Menu(pystray.MenuItem(
-    text="Exit",
-    action=lambda: icon.stop()
-))
+def exit_process():
+    if p.stdout:
+        p.stdout.flush()
+    if p.stderr:
+        p.stderr.flush()
+    p.kill()
+    icon.stop()
+
+icon.menu = pystray.Menu(
+    pystray.MenuItem(
+        text="Switch to CPU mode",
+        action=lambda: p.kill()
+    ),
+    pystray.MenuItem(
+        text="Exit",
+        action=exit_process
+    ),
+)
 
 icon.run()
