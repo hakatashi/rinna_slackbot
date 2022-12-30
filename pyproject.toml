@@ -17,6 +17,9 @@ google-api-python-client = "^2.66.0"
 transformers = "^4.24.0"
 firebase-admin = "^6.0.1"
 pystray = "^0.19.4"
+azure-cognitiveservices-vision-contentmoderator = "^1.0.0"
+google-cloud-pubsub = "^2.13.11"
+google-cloud-language = "^2.7.0"
 
 
 [build-system]
