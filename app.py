@@ -8,7 +8,7 @@ stdout_stream = open('stdout.log', 'a', encoding='utf-8')
 stderr_stream = open('stderr.log', 'a', encoding='utf-8')
 
 worker_process = subprocess.Popen(
-    ['python', 'worker.py', mode],
+    ['python', '-u', 'worker.py', mode],
     stdout=stdout_stream,
     stderr=stderr_stream
 )
@@ -35,7 +35,7 @@ def mode_switch_action(new_mode):
     mode = new_mode
 
     worker_process = subprocess.Popen(
-        ['python', 'worker.py', mode],
+        ['python', '-u', 'worker.py', mode],
         stdout=stdout_stream,
         stderr=stderr_stream
     )
