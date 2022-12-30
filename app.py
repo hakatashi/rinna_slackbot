@@ -1,47 +1,61 @@
-import pystray
+from pystray import Menu, MenuItem, Icon
 import subprocess
-from PIL import Image, ImageDraw
-
-def create_image(width, height, color1, color2):
-    image = Image.new('RGB', (width, height), color1)
-    dc = ImageDraw.Draw(image)
-    dc.rectangle(
-        (width // 2, 0, width, height // 2),
-        fill=color2)
-    dc.rectangle(
-        (0, height // 2, width // 2, height),
-        fill=color2)
-
-    return image
+from PIL import Image
 
 mode = "GPU"
 
 stdout_stream = open('stdout.log', 'a', encoding='utf-8')
 stderr_stream = open('stderr.log', 'a', encoding='utf-8')
 
-p = subprocess.Popen(['python', 'worker.py', 'GPU'], stdout=stdout_stream, stderr=stderr_stream)
+worker_process = subprocess.Popen(
+    ['python', 'worker.py', mode],
+    stdout=stdout_stream,
+    stderr=stderr_stream
+)
 
-icon = pystray.Icon(
+icon = Icon(
     'りんな',
-    icon=create_image(64, 64, 'black', 'white'))
+    icon=Image.open('icon.png'))
+
+def exit_worker():
+    if worker_process.stdout:
+        worker_process.stdout.flush()
+    if worker_process.stderr:
+        worker_process.stderr.flush()
+    worker_process.kill()
 
 def exit_process():
-    if p.stdout:
-        p.stdout.flush()
-    if p.stderr:
-        p.stderr.flush()
-    p.kill()
+    exit_worker()
     icon.stop()
 
-icon.menu = pystray.Menu(
-    pystray.MenuItem(
-        text="Switch to CPU mode",
-        action=lambda: p.kill()
-    ),
-    pystray.MenuItem(
-        text="Exit",
-        action=exit_process
-    ),
+def mode_switch_action(new_mode):
+    global worker_process, mode
+
+    exit_worker()
+    mode = new_mode
+
+    worker_process = subprocess.Popen(
+        ['python', 'worker.py', mode],
+        stdout=stdout_stream,
+        stderr=stderr_stream
+    )
+    icon.menu = Menu(switch_to_gpu_item, exit_item)
+
+switch_to_cpu_item = MenuItem(
+    text="Switch to CPU mode",
+    action=lambda: mode_switch_action("CPU")
 )
+
+switch_to_gpu_item = MenuItem(
+    text="Switch to GPU mode",
+    action=lambda: mode_switch_action("GPU")
+)
+
+exit_item = MenuItem(
+    text="Exit",
+    action=exit_process
+)
+
+icon.menu = Menu(switch_to_cpu_item, exit_item)
 
 icon.run()
