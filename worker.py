@@ -27,6 +27,8 @@ from time import sleep
 
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'google-application-credentials.json'
 
+MODERATION_ALLOWLIST = ['えた']
+
 load_dotenv()
 
 mutex = Lock()
@@ -109,6 +111,11 @@ def normalize_text(text):
     text = text.strip()
 
     return text
+
+def has_offensive_term(terms):
+    if terms is None:
+        return False
+    return any(map(terms, lambda term: term.term not in MODERATION_ALLOWLIST))
 
 def rinna_response(messages, character, dry_run=False):
     character_config = character_configs[character]
@@ -247,7 +254,7 @@ def rinna_response(messages, character, dry_run=False):
             classify=False
         )
 
-        is_offensive = screen.terms is not None and len(screen.terms) > 0
+        is_offensive = has_offensive_term(screen.terms)
 
         if is_adult or is_offensive:
             rinna_message = '##### CENSORED #####'
