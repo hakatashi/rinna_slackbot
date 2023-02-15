@@ -4,8 +4,8 @@ from PIL import Image
 
 mode = "GPU"
 
-stdout_stream = open('stdout.log', 'a', encoding='utf-8')
-stderr_stream = open('stderr.log', 'a', encoding='utf-8')
+stdout_stream = open('stdout.log', mode='ab')
+stderr_stream = open('stderr.log', mode='ab')
 
 worker_process = subprocess.Popen(
     ['python', '-u', 'worker.py', mode],
@@ -37,9 +37,14 @@ def mode_switch_action(new_mode):
     worker_process = subprocess.Popen(
         ['python', '-u', 'worker.py', mode],
         stdout=stdout_stream,
-        stderr=stderr_stream
+        stderr=stderr_stream,
+        encoding="utf8",
+        universal_newlines=True
     )
-    icon.menu = Menu(switch_to_gpu_item, exit_item)
+    if new_mode == "CPU":
+        icon.menu = Menu(switch_to_gpu_item, exit_item)
+    elif new_mode == "GPU":
+        icon.menu = Menu(switch_to_cpu_item, exit_item)
 
 switch_to_cpu_item = MenuItem(
     text="Switch to CPU mode",
