@@ -13,7 +13,7 @@ import torch
 from transformers import T5Tokenizer, AutoModelForCausalLM
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1, language_v1
-from data.intro import rinna_intro, una_intro, uka_intro, uno_intro
+from data.intro import rinna_intro, una_intro, uka_intro, uno_intro, una_inquiry_intro
 from data.users import username_mapping
 import firebase_admin
 from firebase_admin import firestore
@@ -24,6 +24,7 @@ from datetime import datetime
 from azure.cognitiveservices.vision.contentmoderator import ContentModeratorClient
 from msrest.authentication import CognitiveServicesCredentials
 from time import sleep
+from typing import Any
 
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'google-application-credentials.json'
 
@@ -65,6 +66,7 @@ character_configs = {
     },
     'うな': {
         'intro': una_intro,
+        'inquiry_intro': una_inquiry_intro,
         'name_in_text': 'ウナ',
         'slack_user_name': '今言うな',
         'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/una_icon.png',
@@ -121,76 +123,87 @@ def rinna_response(messages, character, dry_run=False):
     character_config = character_configs[character]
     name_in_text = character_config['name_in_text']
 
-    formatted_messages = []
-    for message in messages:
-        if message['text'] is None:
-            continue
+    last_message_text = messages[-1]['text'] or ''
+    is_inquiry = last_message_text.endswith('？') or last_message_text.endswith('?')
 
-        text = normalize_text(message['text'])
+    print(f'{is_inquiry = }')
 
-        if text == '':
-            continue
-
-        if message.get('bot_id') == 'BEHP604TV' and message.get('username') == '今言うな':
-            user = 'ウナ'
-        elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == 'りんな':
-            user = 'りんな'
-        elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == '皿洗うか':
-            user = 'ウカ'
-        elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == '皿洗うの':
-            user = 'ウノ'
-        elif message.get('user') in username_mapping:
-            user = username_mapping[message.get('user')]
-        else:
-            user = message.get('user')
-
-        if len(formatted_messages) >= 1 and formatted_messages[-1]['user'] == user:
-            last_text: str = formatted_messages[-1]['text']
-            if re.search(r'[!?！？。｡、､]$', last_text) is not None:
-                formatted_messages[-1]['text'] = last_text + ' ' + text
-            else:
-                formatted_messages[-1]['text'] = last_text + '。' + text
-        else:
-            formatted_messages.append({
-                'text': text,
-                'user': user,
-            })
-
-    token_ids_output = None
-    formatted_messages_bin = []
-
-    formatted_messages.reverse()
-    text_input = ''
-    formatted_dialog = ''
-
-    for formatted_message in formatted_messages:
-        formatted_messages_bin.insert(0, formatted_message)
-
-        formatted_dialog = '\n'.join(map(
-            lambda message: message['user'] + '「' + message['text'] + '」', formatted_messages_bin))
-
-        text_input = character_config['intro'] + '\n\n' + formatted_dialog + f'\n{name_in_text}「'
-
-        date = datetime.now()
-
-        text_input = text_input.replace(r'[MONTH]', str(date.month))
-        text_input = text_input.replace(r'[DATE]', str(date.day))
-        text_input = text_input.replace(r'[WEEKDAY]', get_weekday_str(date.weekday()))
-        text_input = text_input.replace(r'[HOUR]', get_hour_str(date.hour))
-        text_input = text_input.replace(r'[MINUTE]', str(date.minute))
-        text_input = text_input.replace(r'[WEATHER]', 'くもり')
-
-        token_ids = tokenizer.encode(
+    token_ids_output: Any = None
+    if is_inquiry and 'inquiry_intro' in character_config:
+        formatted_dialog = f'質問「{last_message_text}」'
+        text_input = character_config['inquiry_intro'] + '\n' + formatted_dialog + '\n' + '回答「'
+        token_ids_output = tokenizer.encode(
             text_input, add_special_tokens=False, return_tensors="pt")
-        input_len = len(token_ids[0])
+    else:
+        formatted_messages = []
+        for message in messages:
+            if message['text'] is None:
+                continue
 
-        if input_len > 920:
-            break
-        else:
-            token_ids_output = token_ids
+            text = normalize_text(message['text'])
+
+            if text == '':
+                continue
+
+            if message.get('bot_id') == 'BEHP604TV' and message.get('username') == '今言うな':
+                user = 'ウナ'
+            elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == 'りんな':
+                user = 'りんな'
+            elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == '皿洗うか':
+                user = 'ウカ'
+            elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == '皿洗うの':
+                user = 'ウノ'
+            elif message.get('user') in username_mapping:
+                user = username_mapping[message.get('user')]
+            else:
+                user = message.get('user')
+
+            if len(formatted_messages) >= 1 and formatted_messages[-1]['user'] == user:
+                last_text: str = formatted_messages[-1]['text']
+                if re.search(r'[!?！？。｡、､]$', last_text) is not None:
+                    formatted_messages[-1]['text'] = last_text + ' ' + text
+                else:
+                    formatted_messages[-1]['text'] = last_text + '。' + text
+            else:
+                formatted_messages.append({
+                    'text': text,
+                    'user': user,
+                })
+
+        token_ids_output = None
+        formatted_messages_bin = []
+
+        formatted_messages.reverse()
+        text_input = ''
+        formatted_dialog = ''
+
+        for formatted_message in formatted_messages:
+            formatted_messages_bin.insert(0, formatted_message)
+
+            formatted_dialog = '\n'.join(map(
+                lambda message: message['user'] + '「' + message['text'] + '」', formatted_messages_bin))
+
+            text_input = character_config['intro'] + '\n\n' + formatted_dialog + f'\n{name_in_text}「'
+
+            date = datetime.now()
+
+            text_input = text_input.replace(r'[MONTH]', str(date.month))
+            text_input = text_input.replace(r'[DATE]', str(date.day))
+            text_input = text_input.replace(r'[WEEKDAY]', get_weekday_str(date.weekday()))
+            text_input = text_input.replace(r'[HOUR]', get_hour_str(date.hour))
+            text_input = text_input.replace(r'[MINUTE]', str(date.minute))
+            text_input = text_input.replace(r'[WEATHER]', 'くもり')
+
+            token_ids = tokenizer.encode(
+                text_input, add_special_tokens=False, return_tensors="pt")
+            input_len = len(token_ids[0])
+
+            if input_len > 920:
+                break
+            else:
+                token_ids_output = token_ids
 
     input_len = len(token_ids_output[0])
-    print(text_input)
     print(f'{input_len = }')
 
     config = {
@@ -222,8 +235,6 @@ def rinna_response(messages, character, dry_run=False):
     rinna_speech = rinna_speech.replace('ウナ', 'うな')
     rinna_speech = rinna_speech.replace('ウカ', 'うか')
     rinna_speech = rinna_speech.replace('ウノ', 'うの')
-
-    print(f'{name_in_text}「{rinna_speech}」', flush=True)
 
     for rinna_message in rinna_speech.split('。'):
         document = language_v1.Document(
@@ -315,7 +326,7 @@ subscription_path = subscriber.subscription_path(project_id, subscription_id)
 def pubsub_callback(message) -> None:
     data_buf = message.data
     data = json.loads(data_buf.decode())
-    print('received rinna-signal:', data)
+    print('received rinna-signal')
 
     if 'humanMessages' in data and isinstance(data['humanMessages'], list):
         mutex.acquire()
