@@ -1,6 +1,7 @@
 # coding=utf8
 
 from threading import Lock
+import time
 import random
 import traceback
 from slack_sdk import WebClient
@@ -402,6 +403,23 @@ def pubsub_callback(message) -> None:
 
         finally:
             mutex.release()
+
+    if data['type'] == 'rinna-ping':
+        topic_id = data['topicId']
+        ts = int(topic_id.split('-')[-1])
+        current_time = time.time() * 1000
+        if current_time - ts > 1000 * 20:
+            print(f'Ignoring old ping: {topic_id}')
+        else:
+            topic_path = publisher.topic_path(project_id, topic_id)
+            publish_future = publisher.publish(topic_path, json.dumps({
+                'type': 'rinna-pong',
+                'mode': sys.argv[1],
+            }).encode())
+
+            print(publish_future.result())
+
+        message.ack()
 
 
 streaming_pull_future = subscriber.subscribe(subscription_path, callback=pubsub_callback)
