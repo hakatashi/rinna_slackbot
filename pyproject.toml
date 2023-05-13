@@ -8,19 +8,29 @@ readme = "README.md"
 packages = [{include = "rinna_slackbot"}]
 
 [tool.poetry.dependencies]
-python = "^3.9"
-torch = "1.12.1"
+python = "^3.10"
 slack-sdk = "^3.19.4"
 regex = "^2022.10.31"
 python-dotenv = "^0.21.0"
 google-api-python-client = "^2.66.0"
-transformers = "^4.24.0"
 firebase-admin = "^6.0.1"
 pystray = "^0.19.4"
 azure-cognitiveservices-vision-contentmoderator = "^1.0.0"
 google-cloud-pubsub = "^2.13.11"
 google-cloud-language = "^2.7.0"
+datasets = "^2.9.0"
+sentencepiece = "^0.1.97"
+evaluate = "^0.4.0"
+transformers = {git = "https://github.com/huggingface/transformers"}
+scikit-learn = "^1.2.1"
+torch = "^1.13.1+cu116"
 
+
+[[tool.poetry.source]]
+name = "cu116"
+url = "https://download.pytorch.org/whl/cu116"
+default = false
+secondary = true
 
 [build-system]
 requires = ["poetry-core"]
