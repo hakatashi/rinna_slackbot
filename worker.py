@@ -217,6 +217,10 @@ def rinna_response(messages, character, dry_run=False):
             else:
                 token_ids_output = token_ids
 
+    if token_ids_output is None:
+        print('token_ids_output is empty. Quitting...')
+        return ''
+
     input_len = len(token_ids_output[0])
     print(f'{input_len = }')
 
