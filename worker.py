@@ -14,7 +14,7 @@ from pathlib import Path
 from transformers import T5Tokenizer, AutoModelForCausalLM
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1, language_v1
-from data.intro import rinna_intro, rinna_inquiry_intro, una_intro, uka_intro, uno_intro, una_inquiry_intro
+from data.intro import rinna_intro, rinna_inquiry_intro, una_intro, uka_intro, uno_intro, una_inquiry_intro, tatamo_intro
 from data.users import username_mapping
 import firebase_admin
 from firebase_admin import firestore
@@ -77,13 +77,19 @@ character_configs = {
         'intro': uka_intro,
         'name_in_text': 'ウカ',
         'slack_user_name': '皿洗うか',
-        'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/user01.png',
+        'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/uka_icon_edit.png',
     },
     'うの': {
         'intro': uno_intro,
         'name_in_text': 'ウノ',
         'slack_user_name': '皿洗うの',
-        'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/user02.png',
+        'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/uno_icon.png',
+    },
+    'たたも': {
+        'intro': tatamo_intro,
+        'name_in_text': 'タタモ',
+        'slack_user_name': '三脚たたも',
+        'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/user03.png',
     },
 }
 
@@ -101,13 +107,16 @@ def normalize_text(text):
     text = re.sub(r'@うな', '', text)
     text = re.sub(r'@うか', '', text)
     text = re.sub(r'@うの', '', text)
-    text = regex.sub(r'[\p{Ps}\p{Pe}\r\n]', '', text)
+    text = re.sub(r'@たたも', '', text)
+    text = regex.sub(r'[\p{Ps}\p{Pe}\r\n]+', ' ', text)
     text = re.sub(r'<.+?>', '', text)
+    text = re.sub(r'ワシ', '儂', text)
     text = re.sub(r'今言うな', 'ウナ', text)
     text = re.sub(r'皿洗うか', 'ウカ', text)
     text = re.sub(r'皿洗うの', 'ウノ', text)
+    text = re.sub(r'三脚たたも', 'タタモ', text)
 
-    for name, new_name in [('うな', 'ウナ'), ('うか', 'ウカ'), ('うの', 'ウノ')]:
+    for name, new_name in [('うな', 'ウナ'), ('うか', 'ウカ'), ('うの', 'ウノ'), ('たたも', 'タタモ')]:
         text = re.sub(f'^{name}', new_name, text)
         text = re.sub(f'{name}$', new_name, text)
         text = re.sub(f'{name}([はがのを])', f'{new_name}\\1', text)
@@ -155,6 +164,8 @@ def rinna_response(messages, character, dry_run=False):
                 user = 'ウカ'
             elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == '皿洗うの':
                 user = 'ウノ'
+            elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == '三脚たたも':
+                user = 'タタモ'
             elif message.get('user') in username_mapping:
                 user = username_mapping[message.get('user')]
             else:
@@ -171,7 +182,7 @@ def rinna_response(messages, character, dry_run=False):
                     'text': text,
                     'user': user,
                 })
-
+        
         token_ids_output = None
         formatted_messages_bin = []
 
@@ -237,6 +248,9 @@ def rinna_response(messages, character, dry_run=False):
     rinna_speech = rinna_speech.replace('ウナ', 'うな')
     rinna_speech = rinna_speech.replace('ウカ', 'うか')
     rinna_speech = rinna_speech.replace('ウノ', 'うの')
+    rinna_speech = rinna_speech.replace('タタモ', 'たたも')
+    if character == 'たたも':
+        rinna_speech = rinna_speech.replace('ワシ', '儂')
 
     for rinna_message in rinna_speech.split('。'):
         document = language_v1.Document(
