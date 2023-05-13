@@ -10,10 +10,11 @@ import regex
 import signal
 from dotenv import load_dotenv
 import torch
+from pathlib import Path
 from transformers import T5Tokenizer, AutoModelForCausalLM
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1, language_v1
-from data.intro import rinna_intro, una_intro, uka_intro, uno_intro, una_inquiry_intro
+from data.intro import rinna_intro, rinna_inquiry_intro, una_intro, uka_intro, uno_intro, una_inquiry_intro
 from data.users import username_mapping
 import firebase_admin
 from firebase_admin import firestore
@@ -60,6 +61,7 @@ print(f'Using {model.device} for processing rinna-signal')
 character_configs = {
     'りんな': {
         'intro': rinna_intro,
+        'inquiry_intro': rinna_inquiry_intro,
         'name_in_text': 'りんな',
         'slack_user_name': 'りんな',
         'slack_user_icon': 'https://huggingface.co/rinna/japanese-gpt-1b/resolve/main/rinna.png',
