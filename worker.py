@@ -15,7 +15,7 @@ from pathlib import Path
 from transformers import T5Tokenizer, AutoModelForCausalLM
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1, language_v1
-from data.intro import rinna_intro, rinna_inquiry_intro, una_intro, uka_intro, uno_intro, una_inquiry_intro, tatamo_intro
+from data.intro import rinna_intro, rinna_inquiry_intro, una_intro, uka_intro, uno_intro, una_inquiry_intro, tatamo_intro, una_meaning_intro
 from data.users import username_mapping
 import firebase_admin
 from firebase_admin import firestore
@@ -70,6 +70,7 @@ character_configs = {
     'うな': {
         'intro': una_intro,
         'inquiry_intro': una_inquiry_intro,
+        'meaning_intro': una_meaning_intro,
         'name_in_text': 'ウナ',
         'slack_user_name': '今言うな',
         'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/una_icon.png',
@@ -130,6 +131,44 @@ def has_offensive_term(terms):
     if terms is None:
         return False
     return any(map(terms, lambda term: term.term not in MODERATION_ALLOWLIST))
+
+def moderate_message(message):
+    document = language_v1.Document(
+        content=message,
+        type_=language_v1.Document.Type.PLAIN_TEXT,
+        language="JA",
+    )
+
+    classification = language_client.classify_text(
+        request={
+            "document": document,
+            "classification_model_options": {
+                "v2_model": {
+                    "content_categories_version": "V2",
+                },
+            },
+        },
+    )
+
+    is_adult = any(map(lambda category: category.name == '/Adult', classification.categories))
+
+    screen = content_moderator_client.text_moderation.screen_text(
+        text_content_type='text/plain',
+        text_content=BytesIO(message.encode()),
+        language='jpn',
+        autocorrect=False,
+        pii=False,
+        classify=False
+    )
+
+    is_offensive = has_offensive_term(screen.terms)
+
+    moderations = {
+        'google_language_service': classification._meta.parent.to_dict(classification),
+        'azure_content_moderator': screen.as_dict(),
+    }
+
+    return is_adult or is_offensive, moderations
 
 def rinna_response(messages, character, dry_run=False):
     character_config = character_configs[character]
@@ -257,38 +296,19 @@ def rinna_response(messages, character, dry_run=False):
     if character == 'たたも':
         rinna_speech = rinna_speech.replace('ワシ', '儂')
 
-    for rinna_message in rinna_speech.split('。'):
-        document = language_v1.Document(
-            content=rinna_message,
-            type_=language_v1.Document.Type.PLAIN_TEXT,
-            language="JA",
-        )
+    speech_chunks = re.findall(r"[^!?！？♪｡。]*[!?！？♪｡。]*", rinna_speech)
 
-        classification = language_client.classify_text(
-            request={
-                "document": document,
-                "classification_model_options": {
-                    "v2_model": {
-                        "content_categories_version": "V2",
-                    },
-                },
-            },
-        )
+    for rinna_message in speech_chunks:
+        if len(rinna_message) == 0:
+            continue
 
-        is_adult = any(map(lambda category: category.name == '/Adult', classification.categories))
+        if rinna_message.endswith('。') and not re.match(r'。{2,}$', rinna_message):
+            rinna_message = re.sub(r'。$', '', rinna_message)
 
-        screen = content_moderator_client.text_moderation.screen_text(
-            text_content_type='text/plain',
-            text_content=BytesIO(rinna_message.encode()),
-            language='jpn',
-            autocorrect=False,
-            pii=False,
-            classify=False
-        )
+        sleep(1)
+        is_censored, moderations = moderate_message(rinna_message)
 
-        is_offensive = has_offensive_term(screen.terms)
-
-        if is_adult or is_offensive:
+        if is_censored:
             rinna_message = '##### CENSORED #####'
 
         if dry_run:
@@ -313,27 +333,129 @@ def rinna_response(messages, character, dry_run=False):
             'outputSpeech': rinna_speech,
             'config': config,
             'message': api_response.data,
-            'moderations': {
-                'google_language_service': classification._meta.parent.to_dict(classification),
-                'azure_content_moderator': screen.as_dict(),
-            },
+            'moderations': moderations,
         })
-
-        sleep(1)
 
     return rinna_speech
 
+def rinna_meaning(word, ts = None, character = 'うな', dry_run = False):
+    # print(f'rinna_meaning({word = }, {character = })')
+
+    character_config = character_configs[character]
+
+    if 'meaning_intro' not in character_config:
+        return None
+
+    character_name = character_config['name_in_text']
+    slack_username = character_config['slack_user_name']
+
+    inquiry_message = f'ひでお「{character_name}、『{word}』ってわかる？」'
+    response_message = f'{character_name}「『{word}』っていうのは、'
+
+    text_input = character_config['meaning_intro'] + '\n' + inquiry_message + '\n' + response_message
+
+    token_ids = tokenizer.encode(
+        text_input, add_special_tokens=False, return_tensors="pt")
+    input_len = len(token_ids[0])
+
+    print(f'{input_len = }')
+    if input_len > 920:
+        return None
+
+    config = {
+        'do_sample': True,
+        'top_k': 500,
+        'top_p': 1.0,
+        'temperature': 0.8,
+        'repetition_penalty': 1.05,
+        'pad_token_id': tokenizer.pad_token_id,
+        'bos_token_id': tokenizer.bos_token_id,
+        'eos_token_id': tokenizer.eos_token_id,
+        # bad_word_ids=[[tokenizer.unk_token_id]]
+    }
+
+    with torch.no_grad():
+        output_ids = model.generate(
+            token_ids.to(model.device),
+            max_length=input_len + 100,
+            min_length=input_len + 100,
+            **config,
+        )
+
+    output = tokenizer.decode(output_ids.tolist()[0][input_len:])
+
+    rinna_speech = output.split('」')[0]
+    rinna_speech = rinna_speech.replace('[UNK]', '')
+    rinna_speech = rinna_speech.replace('『', '「')
+    rinna_speech = rinna_speech.replace('』', '」')
+    rinna_speech = rinna_speech.replace('ウナ', 'うな')
+    rinna_speech = rinna_speech.replace('ウカ', 'うか')
+    rinna_speech = rinna_speech.replace('ウノ', 'うの')
+    rinna_speech = rinna_speech.replace('タタモ', 'たたも')
+    if character == 'たたも':
+        rinna_speech = rinna_speech.replace('ワシ', '儂')
+
+    speech_chunks = re.findall(r"[^!?！？♪｡。]*[!?！？♪｡。]*", rinna_speech)
+
+    for i, rinna_message in enumerate(speech_chunks):
+        if len(rinna_message) == 0:
+            continue
+
+        if rinna_message.endswith('。') and not re.match(r'。{2,}$', rinna_message):
+            rinna_message = re.sub(r'。$', '', rinna_message)
+
+        if i == 0:
+            rinna_message = f'{word}っていうのは、{rinna_message}'
+
+        sleep(1)
+        is_censored, moderations = moderate_message(rinna_message)
+
+        if is_censored:
+            rinna_message = '##### CENSORED #####'
+
+        if dry_run:
+            print(f'Output: {rinna_message}')
+            continue
+
+        post_message_kwargs = {
+            'text': rinna_message,
+            'channel': 'C7AAX50QY',
+            'icon_url': character_config['slack_user_icon'],
+            'username': f'おじさんが役に立たないときに助けてくれる{slack_username}',
+        }
+
+        if ts is not None:
+            post_message_kwargs['thread_ts'] = ts
+            post_message_kwargs['reply_broadcast'] = True
+
+        api_response = client.chat_postMessage(**post_message_kwargs)
+
+        responses_ref.add({
+            'createdAt': datetime.now(),
+            'character': character,
+            'inputMessages': [],
+            'inputText': text_input,
+            'inputDialog': '',
+            'inputTokenLength': input_len,
+            'output': output,
+            'outputSpeech': rinna_speech,
+            'config': config,
+            'message': api_response.data,
+            'moderations': moderations,
+        })
+
 '''
-rinna_response([
-    {
-        'user': 'U04G7TL4P',
-        'text': 'ひ～疲れた～',
-    },
-    {
-        'user': 'U04G7TL4P',
-        'text': 'うかの好きな食べ物って何？',
-    },
-], 'うか', True)
+for word in ['拙斎詩鈔', '太平洋諸島フォーラム', '備後の山中', '十把', 'クラスター', '死亡時画像診断', '耐えうる', '厄払いの図柄', 'アバイ', '自然エネルギー', 'RPS法', '徘徊したがる']:
+    rinna_meaning(word, None, 'うな', True)
+
+for i in range(10):
+    print(rinna_response([
+        {
+            'user': 'U04G7TL4P',
+            'text': 'たたもって何歳なんだろう',
+        },
+    ], 'たたも', True))
+
 sys.exit()
 '''
 
@@ -343,62 +465,95 @@ subscription_id = "rinna-signal"
 subscriber = pubsub_v1.SubscriberClient()
 subscription_path = subscriber.subscription_path(project_id, subscription_id)
 
+publisher = pubsub_v1.PublisherClient()
+
 
 def pubsub_callback(message) -> None:
     data_buf = message.data
     data = json.loads(data_buf.decode())
     print('received rinna-signal')
 
-    if 'humanMessages' in data and isinstance(data['humanMessages'], list):
+    if 'humanMessages' in data and data['type'] == 'rinna-signal' and isinstance(data['humanMessages'], list):
         mutex.acquire()
 
         trigger_text = data['humanMessages'][-1]['text']
         rinna_triggered = False
 
         try:
-            if 'りんな' in trigger_text:
-                response = rinna_response(data['humanMessages'], 'りんな')
-                data['humanMessages'].append({
-                    'bot_id': 'BEHP604TV',
-                    'username': 'りんな',
-                    'text': response,
-                })
-                rinna_triggered = True
+            if '@うな先生' in trigger_text:
+                word = re.sub(r'^@うな先生', '', trigger_text)
+                word = word.strip()
+                response = rinna_meaning(word, None, 'うな')
 
-            if 'うな' in trigger_text:
-                response = rinna_response(data['humanMessages'], 'うな')
-                data['humanMessages'].append({
-                    'bot_id': 'BEHP604TV',
-                    'username': '今言うな',
-                    'text': response,
-                })
-                rinna_triggered = True
+            else:
+                if 'りんな' in trigger_text:
+                    response = rinna_response(data['humanMessages'], 'りんな')
+                    data['humanMessages'].append({
+                        'bot_id': 'BEHP604TV',
+                        'username': 'りんな',
+                        'text': response,
+                    })
+                    rinna_triggered = True
 
-            if 'うか' in trigger_text:
-                response = rinna_response(data['humanMessages'], 'うか')
-                data['humanMessages'].append({
-                    'bot_id': 'BEHP604TV',
-                    'username': '皿洗うか',
-                    'text': response,
-                })
-                rinna_triggered = True
+                if 'うな' in trigger_text:
+                    response = rinna_response(data['humanMessages'], 'うな')
+                    data['humanMessages'].append({
+                        'bot_id': 'BEHP604TV',
+                        'username': '今言うな',
+                        'text': response,
+                    })
+                    rinna_triggered = True
 
-            if 'うの' in trigger_text:
-                response = rinna_response(data['humanMessages'], 'うの')
-                data['humanMessages'].append({
-                    'bot_id': 'BEHP604TV',
-                    'username': '皿洗うの',
-                    'text': response,
-                })
-                rinna_triggered = True
+                if 'うか' in trigger_text:
+                    response = rinna_response(data['humanMessages'], 'うか')
+                    data['humanMessages'].append({
+                        'bot_id': 'BEHP604TV',
+                        'username': '皿洗うか',
+                        'text': response,
+                    })
+                    rinna_triggered = True
 
-            if not rinna_triggered:
-                if '皿洗' in trigger_text:
-                    character = random.choice(['うか', 'うの'])
-                else:
-                    character = random.choice(['りんな', 'うな', 'うか', 'うの'])
-                rinna_response(data['humanMessages'], character)
+                if 'うの' in trigger_text:
+                    response = rinna_response(data['humanMessages'], 'うの')
+                    data['humanMessages'].append({
+                        'bot_id': 'BEHP604TV',
+                        'username': '皿洗うの',
+                        'text': response,
+                    })
+                    rinna_triggered = True
 
+                if 'たたも' in trigger_text:
+                    response = rinna_response(data['humanMessages'], 'たたも')
+                    data['humanMessages'].append({
+                        'bot_id': 'BEHP604TV',
+                        'username': '三脚たたも',
+                        'text': response,
+                    })
+                    rinna_triggered = True
+
+                if not rinna_triggered:
+                    if '皿洗' in trigger_text:
+                        character = random.choice(['うか', 'うの'])
+                    else:
+                        print('random.choice')
+                        character = random.choice(['りんな', 'うな', 'うか', 'うの', 'たたも'])
+                        print(f'character = {character}')
+                    rinna_response(data['humanMessages'], character)
+
+            message.ack()
+
+        except Exception as e:
+            traceback.print_exc()
+            print(e)
+
+        finally:
+            mutex.release()
+
+    if data['type'] == 'rinna-meaning':
+        mutex.acquire()
+
+        try:
+            rinna_meaning(data.get('word'), data.get('ts'), 'うな')
             message.ack()
 
         except Exception as e:
