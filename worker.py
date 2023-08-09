@@ -130,7 +130,7 @@ def normalize_text(text):
 def has_offensive_term(terms):
     if terms is None:
         return False
-    return any(map(terms, lambda term: term.term not in MODERATION_ALLOWLIST))
+    return any(map(lambda term: term.term not in MODERATION_ALLOWLIST, terms))
 
 def moderate_message(message):
     document = language_v1.Document(
