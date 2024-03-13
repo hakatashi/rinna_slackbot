@@ -7,16 +7,10 @@ import traceback
 from slack_sdk import WebClient
 import json
 import re
-import regex
 import signal
 from dotenv import load_dotenv
-import torch
-from pathlib import Path
-from transformers import T5Tokenizer, AutoModelForCausalLM
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1, language_v1
-from data.intro import rinna_intro, rinna_inquiry_intro, una_intro, uka_intro, uno_intro, una_inquiry_intro, tatamo_intro, una_meaning_intro
-from data.users import username_mapping
 import firebase_admin
 from firebase_admin import firestore
 import os
@@ -26,17 +20,15 @@ from datetime import datetime
 from azure.cognitiveservices.vision.contentmoderator import ContentModeratorClient
 from msrest.authentication import CognitiveServicesCredentials
 from time import sleep
-from typing import Any
-
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'google-application-credentials.json'
-
-MODERATION_ALLOWLIST = ['えた', 'クリ']
+from rinna.utils import has_offensive_term
+from rinna.generation import generate_rinna_response, generate_rinna_meaning
+from rinna.configs import character_configs
 
 load_dotenv()
 
 mutex = Lock()
 
-client = WebClient(token=os.environ['SLACK_TOKEN'])
+slack_client = WebClient(token=os.environ['SLACK_TOKEN'])
 language_client = language_v1.LanguageServiceClient()
 content_moderator_client = ContentModeratorClient(
     endpoint=os.environ['CONTENT_MODERATOR_ENDPOINT'],
@@ -44,93 +36,10 @@ content_moderator_client = ContentModeratorClient(
         os.environ['CONTENT_MODERATOR_SUBSCRIPTION_KEY'])
 )
 
-
 app = firebase_admin.initialize_app()
 db = firestore.client()
 
 responses_ref = db.collection(u'rinna-responses')
-
-tokenizer = T5Tokenizer.from_pretrained("rinna/japanese-gpt-1b")
-model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt-1b")
-
-if torch.cuda.is_available() and sys.argv[1] == 'GPU':
-    model = model.to("cuda")
-    pass
-
-print(f'Using {model.device} for processing rinna-signal')
-
-character_configs = {
-    'りんな': {
-        'intro': rinna_intro,
-        'inquiry_intro': rinna_inquiry_intro,
-        'name_in_text': 'りんな',
-        'slack_user_name': 'りんな',
-        'slack_user_icon': 'https://huggingface.co/rinna/japanese-gpt-1b/resolve/main/rinna.png',
-    },
-    'うな': {
-        'intro': una_intro,
-        'inquiry_intro': una_inquiry_intro,
-        'meaning_intro': una_meaning_intro,
-        'name_in_text': 'ウナ',
-        'slack_user_name': '今言うな',
-        'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/una_icon.png',
-    },
-    'うか': {
-        'intro': uka_intro,
-        'name_in_text': 'ウカ',
-        'slack_user_name': '皿洗うか',
-        'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/uka_icon_edit.png',
-    },
-    'うの': {
-        'intro': uno_intro,
-        'name_in_text': 'ウノ',
-        'slack_user_name': '皿洗うの',
-        'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/uno_icon.png',
-    },
-    'たたも': {
-        'intro': tatamo_intro,
-        'name_in_text': 'タタモ',
-        'slack_user_name': '三脚たたも',
-        'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/user03.png',
-    },
-}
-
-def get_weekday_str(weekday):
-    return '月火水木金土日'[weekday]
-
-def get_hour_str(hour):
-    if hour <= 12:
-        return f'午前{hour}'
-    else:
-        return f'午後{hour - 12}'
-
-def normalize_text(text):
-    text = re.sub(r'@りんな', '', text)
-    text = re.sub(r'@うな', '', text)
-    text = re.sub(r'@うか', '', text)
-    text = re.sub(r'@うの', '', text)
-    text = re.sub(r'@たたも', '', text)
-    text = regex.sub(r'[\p{Ps}\p{Pe}\r\n]+', ' ', text)
-    text = re.sub(r'<.+?>', '', text)
-    text = re.sub(r'ワシ', '儂', text)
-    text = re.sub(r'今言うな', 'ウナ', text)
-    text = re.sub(r'皿洗うか', 'ウカ', text)
-    text = re.sub(r'皿洗うの', 'ウノ', text)
-    text = re.sub(r'三脚たたも', 'タタモ', text)
-
-    for name, new_name in [('うな', 'ウナ'), ('うか', 'ウカ'), ('うの', 'ウノ'), ('たたも', 'タタモ')]:
-        text = re.sub(f'^{name}', new_name, text)
-        text = re.sub(f'{name}$', new_name, text)
-        text = re.sub(f'{name}([はがのを])', f'{new_name}\\1', text)
-
-    text = text.strip()
-
-    return text
-
-def has_offensive_term(terms):
-    if terms is None:
-        return False
-    return any(map(lambda term: term.term not in MODERATION_ALLOWLIST, terms))
 
 def moderate_message(message):
     document = language_v1.Document(
@@ -172,131 +81,8 @@ def moderate_message(message):
 
 def rinna_response(messages, character, dry_run=False):
     character_config = character_configs[character]
-    name_in_text = character_config['name_in_text']
 
-    last_message_text = messages[-1]['text'] or ''
-    is_inquiry = last_message_text.endswith('？') or last_message_text.endswith('?')
-
-    print(f'{is_inquiry = }')
-
-    token_ids_output: Any = None
-    if is_inquiry and 'inquiry_intro' in character_config:
-        formatted_dialog = f'質問「{last_message_text}」'
-        text_input = character_config['inquiry_intro'] + '\n' + formatted_dialog + '\n' + '回答「'
-        token_ids_output = tokenizer.encode(
-            text_input, add_special_tokens=False, return_tensors="pt")
-    else:
-        formatted_messages = []
-        for message in messages:
-            if message['text'] is None:
-                continue
-
-            text = normalize_text(message['text'])
-
-            if text == '':
-                continue
-
-            if message.get('bot_id') == 'BEHP604TV' and message.get('username') == '今言うな':
-                user = 'ウナ'
-            elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == 'りんな':
-                user = 'りんな'
-            elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == '皿洗うか':
-                user = 'ウカ'
-            elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == '皿洗うの':
-                user = 'ウノ'
-            elif message.get('bot_id') == 'BEHP604TV' and message.get('username') == '三脚たたも':
-                user = 'タタモ'
-            elif message.get('user') in username_mapping:
-                user = username_mapping[message.get('user')]
-            else:
-                user = message.get('user')
-
-            if len(formatted_messages) >= 1 and formatted_messages[-1]['user'] == user:
-                last_text: str = formatted_messages[-1]['text']
-                if re.search(r'[!?！？。｡、､]$', last_text) is not None:
-                    formatted_messages[-1]['text'] = last_text + ' ' + text
-                else:
-                    formatted_messages[-1]['text'] = last_text + '。' + text
-            else:
-                formatted_messages.append({
-                    'text': text,
-                    'user': user,
-                })
-        
-        token_ids_output = None
-        formatted_messages_bin = []
-
-        formatted_messages.reverse()
-        text_input = ''
-        formatted_dialog = ''
-
-        for formatted_message in formatted_messages:
-            formatted_messages_bin.insert(0, formatted_message)
-
-            formatted_dialog = '\n'.join(map(
-                lambda message: message['user'] + '「' + message['text'] + '」', formatted_messages_bin))
-
-            text_input = character_config['intro'] + '\n\n' + formatted_dialog + f'\n{name_in_text}「'
-
-            date = datetime.now()
-
-            text_input = text_input.replace(r'[MONTH]', str(date.month))
-            text_input = text_input.replace(r'[DATE]', str(date.day))
-            text_input = text_input.replace(r'[WEEKDAY]', get_weekday_str(date.weekday()))
-            text_input = text_input.replace(r'[HOUR]', get_hour_str(date.hour))
-            text_input = text_input.replace(r'[MINUTE]', str(date.minute))
-            text_input = text_input.replace(r'[WEATHER]', 'くもり')
-
-            token_ids = tokenizer.encode(
-                text_input, add_special_tokens=False, return_tensors="pt")
-            input_len = len(token_ids[0])
-
-            if input_len > 920:
-                break
-            else:
-                token_ids_output = token_ids
-
-    if token_ids_output is None:
-        print('token_ids_output is empty. Quitting...')
-        return ''
-
-    input_len = len(token_ids_output[0])
-    print(f'{input_len = }')
-
-    config = {
-        'do_sample': True,
-        'top_k': 500,
-        'top_p': 1.0,
-        'temperature': 0.8,
-        'repetition_penalty': 1.05,
-        'pad_token_id': tokenizer.pad_token_id,
-        'bos_token_id': tokenizer.bos_token_id,
-        'eos_token_id': tokenizer.eos_token_id,
-        # bad_word_ids=[[tokenizer.unk_token_id]]
-    }
-
-    with torch.no_grad():
-        output_ids = model.generate(
-            token_ids_output.to(model.device),
-            max_length=input_len + 100,
-            min_length=input_len + 100,
-            **config,
-        )
-
-    output = tokenizer.decode(output_ids.tolist()[0][input_len:])
-
-    rinna_speech = output.split('」')[0]
-    rinna_speech = rinna_speech.replace('[UNK]', '')
-    rinna_speech = rinna_speech.replace('『', '「')
-    rinna_speech = rinna_speech.replace('』', '」')
-    rinna_speech = rinna_speech.replace('ウナ', 'うな')
-    rinna_speech = rinna_speech.replace('ウカ', 'うか')
-    rinna_speech = rinna_speech.replace('ウノ', 'うの')
-    rinna_speech = rinna_speech.replace('タタモ', 'たたも')
-    if character == 'たたも':
-        rinna_speech = rinna_speech.replace('ワシ', '儂')
-
-    speech_chunks = re.findall(r"[^!?！？♪｡。]*[!?！？♪｡。]*", rinna_speech)
+    speech_chunks, info = generate_rinna_response(messages, character)
 
     for rinna_message in speech_chunks:
         if len(rinna_message) == 0:
@@ -315,7 +101,7 @@ def rinna_response(messages, character, dry_run=False):
             print(f'Output: {rinna_message}')
             continue
 
-        api_response = client.chat_postMessage(
+        api_response = slack_client.chat_postMessage(
             text=rinna_message,
             channel='C7AAX50QY',
             icon_url=character_config['slack_user_icon'],
@@ -326,76 +112,27 @@ def rinna_response(messages, character, dry_run=False):
             'createdAt': datetime.now(),
             'character': character,
             'inputMessages': messages,
-            'inputText': text_input,
-            'inputDialog': formatted_dialog,
-            'inputTokenLength': input_len,
-            'output': output,
-            'outputSpeech': rinna_speech,
-            'config': config,
+            'inputText': info['text_input'],
+            'inputDialog': info['formatted_dialog'],
+            'inputTokenLength': info['input_len'],
+            'output': info['output'],
+            'outputSpeech': info['rinna_speech'],
+            'config': info['config'],
             'message': api_response.data,
             'moderations': moderations,
         })
 
-    return rinna_speech
+    return speech_chunks
 
 def rinna_meaning(word, ts = None, character = 'うな', dry_run = False):
-    # print(f'rinna_meaning({word = }, {character = })')
-
     character_config = character_configs[character]
 
     if 'meaning_intro' not in character_config:
         return None
 
-    character_name = character_config['name_in_text']
     slack_username = character_config['slack_user_name']
 
-    inquiry_message = f'ひでお「{character_name}、『{word}』ってわかる？」'
-    response_message = f'{character_name}「『{word}』っていうのは、'
-
-    text_input = character_config['meaning_intro'] + '\n' + inquiry_message + '\n' + response_message
-
-    token_ids = tokenizer.encode(
-        text_input, add_special_tokens=False, return_tensors="pt")
-    input_len = len(token_ids[0])
-
-    print(f'{input_len = }')
-    if input_len > 920:
-        return None
-
-    config = {
-        'do_sample': True,
-        'top_k': 500,
-        'top_p': 1.0,
-        'temperature': 0.8,
-        'repetition_penalty': 1.05,
-        'pad_token_id': tokenizer.pad_token_id,
-        'bos_token_id': tokenizer.bos_token_id,
-        'eos_token_id': tokenizer.eos_token_id,
-        # bad_word_ids=[[tokenizer.unk_token_id]]
-    }
-
-    with torch.no_grad():
-        output_ids = model.generate(
-            token_ids.to(model.device),
-            max_length=input_len + 100,
-            min_length=input_len + 100,
-            **config,
-        )
-
-    output = tokenizer.decode(output_ids.tolist()[0][input_len:])
-
-    rinna_speech = output.split('」')[0]
-    rinna_speech = rinna_speech.replace('[UNK]', '')
-    rinna_speech = rinna_speech.replace('『', '「')
-    rinna_speech = rinna_speech.replace('』', '」')
-    rinna_speech = rinna_speech.replace('ウナ', 'うな')
-    rinna_speech = rinna_speech.replace('ウカ', 'うか')
-    rinna_speech = rinna_speech.replace('ウノ', 'うの')
-    rinna_speech = rinna_speech.replace('タタモ', 'たたも')
-    if character == 'たたも':
-        rinna_speech = rinna_speech.replace('ワシ', '儂')
-
-    speech_chunks = re.findall(r"[^!?！？♪｡。]*[!?！？♪｡。]*", rinna_speech)
+    speech_chunks, info = generate_rinna_meaning(character, word)
 
     for i, rinna_message in enumerate(speech_chunks):
         if len(rinna_message) == 0:
@@ -428,18 +165,18 @@ def rinna_meaning(word, ts = None, character = 'うな', dry_run = False):
             post_message_kwargs['thread_ts'] = ts
             post_message_kwargs['reply_broadcast'] = True
 
-        api_response = client.chat_postMessage(**post_message_kwargs)
+        api_response = slack_client.chat_postMessage(**post_message_kwargs)
 
         responses_ref.add({
             'createdAt': datetime.now(),
             'character': character,
             'inputMessages': [],
-            'inputText': text_input,
+            'inputText': info['text_input'],
             'inputDialog': '',
-            'inputTokenLength': input_len,
-            'output': output,
-            'outputSpeech': rinna_speech,
-            'config': config,
+            'inputTokenLength': info['input_len'],
+            'output': info['output'],
+            'outputSpeech': info['rinna_speech'],
+            'config': info['config'],
             'message': api_response.data,
             'moderations': moderations,
         })

@@ -5,6 +5,7 @@ description = ""
 authors = ["Koki Takahashi <hakatasiloving@gmail.com>"]
 license = "Apache Licence 2.0"
 readme = "README.md"
+packages = [{ include = "**/*" }]
 
 [tool.poetry.dependencies]
 python = "^3.10"
