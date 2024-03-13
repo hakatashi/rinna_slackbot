@@ -130,3 +130,7 @@ dmypy.json
 
 google-application-credentials.json
 node_modules
+
+data
+finetune
+.vscode
