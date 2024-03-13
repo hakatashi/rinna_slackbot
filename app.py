@@ -3,12 +3,13 @@ import subprocess
 from PIL import Image
 
 mode = "GPU"
+print(f'mode = {mode}')
 
 stdout_stream = open('stdout.log', mode='ab')
 stderr_stream = open('stderr.log', mode='ab')
 
 worker_process = subprocess.Popen(
-    ['python', '-u', 'worker.py', mode],
+    ['C:\\Users\\hakatashi\\AppData\\Local\\pypoetry\\Cache\\virtualenvs\\rinna-slackbot-3Gi20Cgw-py3.10\\Scripts\\python.exe', '-u', 'worker.py', mode],
     stdout=stdout_stream,
     stderr=stderr_stream
 )
@@ -35,7 +36,7 @@ def mode_switch_action(new_mode):
     mode = new_mode
 
     worker_process = subprocess.Popen(
-        ['python', '-u', 'worker.py', mode],
+        ['C:\\Users\\hakatashi\\AppData\\Local\\pypoetry\\Cache\\virtualenvs\\rinna-slackbot-3Gi20Cgw-py3.10\\Scripts\\python.exe', '-u', 'worker.py', mode],
         stdout=stdout_stream,
         stderr=stderr_stream,
         encoding="utf8",
