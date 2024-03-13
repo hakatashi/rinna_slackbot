@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 
 google-application-credentials.json
+node_modules
