@@ -1,3 +1,0 @@
-[submodule "finetune/transformers"]
-	path = finetune/transformers
-	url = https://github.com/huggingface/transformers
