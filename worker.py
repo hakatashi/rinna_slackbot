@@ -30,7 +30,7 @@ from typing import Any
 
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'google-application-credentials.json'
 
-MODERATION_ALLOWLIST = ['えた']
+MODERATION_ALLOWLIST = ['えた', 'クリ']
 
 load_dotenv()
 
