@@ -5,7 +5,6 @@ description = ""
 authors = ["Koki Takahashi <hakatasiloving@gmail.com>"]
 license = "Apache Licence 2.0"
 readme = "README.md"
-packages = [{include = "rinna_slackbot"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -23,14 +22,14 @@ sentencepiece = "^0.1.97"
 evaluate = "^0.4.0"
 transformers = {git = "https://github.com/huggingface/transformers"}
 scikit-learn = "^1.2.1"
-torch = "^1.13.1+cu116"
+torch = {version = "^1.13.1", source = "cu116"}
+psutil = "^5.9.5"
 
 
 [[tool.poetry.source]]
 name = "cu116"
 url = "https://download.pytorch.org/whl/cu116"
-default = false
-secondary = true
+priority = "explicit"
 
 [build-system]
 requires = ["poetry-core"]
