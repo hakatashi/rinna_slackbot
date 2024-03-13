@@ -25,6 +25,8 @@ transformers = {git = "https://github.com/huggingface/transformers"}
 scikit-learn = "^1.2.1"
 torch = {version = "^1.13.1", source = "cu116"}
 psutil = "^5.9.5"
+pytest = "^8.1.1"
+tokenizers = "^0.15.2"
 
 
 [[tool.poetry.source]]

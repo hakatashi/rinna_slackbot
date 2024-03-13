@@ -1,22 +1,12 @@
 import re
 import torch
-from transformers import T5Tokenizer, AutoModelForCausalLM
 from data.users import username_mapping
 from datetime import datetime
 from typing import Any
 from rinna.utils import get_weekday_str, get_hour_str, normalize_text
 from rinna.configs import character_configs
+from rinna.transformer_models import tokenizer, model
 from typing import List, Dict, Tuple
-import sys
-
-tokenizer = T5Tokenizer.from_pretrained("rinna/japanese-gpt-1b")
-model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt-1b")
-
-if torch.cuda.is_available() and sys.argv[1] == 'GPU':
-    model = model.to("cuda")
-    pass
-
-print(f'Using {model.device} for processing rinna-signal')
 
 def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> Tuple[List[str], Dict[str, Any]]:
     character_config = character_configs[character]
