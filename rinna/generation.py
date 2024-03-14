@@ -1,10 +1,9 @@
 import re
 import torch
-from data.users import username_mapping
 from datetime import datetime
 from typing import Any
 from rinna.utils import get_weekday_str, get_hour_str, normalize_text
-from rinna.configs import character_configs
+from rinna.configs import character_configs, username_mapping
 from rinna.transformer_models import tokenizer, model
 from typing import List, Dict, Tuple
 
@@ -135,6 +134,7 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
         rinna_speech = rinna_speech.replace('ワシ', '儂')
 
     speech_chunks = re.findall(r"[^!?！？♪｡。]*[!?！？♪｡。]*", rinna_speech)
+    speech_chunks = list(filter(lambda x: x != '', speech_chunks))
 
     info = {
         'text_input': text_input,

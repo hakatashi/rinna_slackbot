@@ -134,3 +134,5 @@ node_modules
 data
 finetune
 .vscode
+
+*.7z
