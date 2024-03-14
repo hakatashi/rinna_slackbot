@@ -17,47 +17,104 @@ class FakeTokens:
         return self.ids
 
 def test_generate_rinna_response(mocker):
-    # Mock the tokenizer and model from rinna.transformer_models
-    mocker.patch('rinna.generation.tokenizer.encode', return_value=FakeTokens([['博多市', '「', 'Hello', '」', 'りんな']]))
-    mocker.patch('rinna.generation.tokenizer.decode', side_effect=lambda x: ''.join(map(str, x)))
-    mocker.patch('rinna.generation.model.generate', return_value=FakeTokens([[1, 2, 3, 4, 5, 6]]))
-    mocker.patch('nonexistent.hoge', 100)
+    mock_tokens = [
+        'りんなです', '博多市', '「', 'Hello', '」', 'リンナ', '「',
+    ]
+    mock_result = [
+        'おはよう', '博多市', '」', '博多市', '「', 'Hello', '」', 'リンナ', '「',
+    ]
 
-    messages = [{'text': 'Hello', 'bot_id': 'BEHP604TV', 'username': '博多市'}]
+    mocker.patch('rinna.generation.tokenizer.encode', return_value=FakeTokens([mock_tokens]))
+    mocker.patch('rinna.generation.tokenizer.decode', side_effect=lambda x: ''.join(map(str, x)))
+    mocker.patch('rinna.generation.model.generate', return_value=FakeTokens([mock_tokens + mock_result]))
+    mocker.patch('rinna.generation.character_configs', {
+        'りんな': {
+            'intro': 'りんなです',
+            'inquiry_intro': 'りんなです',
+            'name_in_text': 'リンナ',
+        }
+    })
+    mocker.patch('rinna.generation.username_mapping', {
+        'U01234567': '博多市',
+    })
+
+    messages = [{'text': 'Hello', 'bot_id': 'BEHP604TV', 'user': 'U01234567'}]
     character = 'りんな'
 
     result = generate_rinna_response(messages, character)
 
-    tokenizer.encode.assert_called_with('Hello', add_special_tokens=False, return_tensors="pt")
-    tokenizer.decode.assert_called()
+    expected_input = 'りんなです\n\n博多市「Hello」\nリンナ「'
+
+    tokenizer.encode.assert_called_with(expected_input, add_special_tokens=False, return_tensors="pt")
     model.generate.assert_called()
+    tokenizer.decode.assert_called_with(mock_result)
 
     assert isinstance(result, tuple)
     assert len(result) == 2
 
-    speech_chunks, token_ids_output = result
+    speech_chunks, info = result
 
     assert isinstance(speech_chunks, list)
     assert len(speech_chunks) == 1
-    assert speech_chunks[0] == '456'
+    assert speech_chunks[0] == 'おはよう博多市'
+
+    assert isinstance(info, dict)
+    assert info['text_input'] == expected_input
+    assert info['formatted_dialog'] == '博多市「Hello」'
+    assert info['output'] == 'おはよう博多市」博多市「Hello」リンナ「'
+    assert info['rinna_speech'] == 'おはよう博多市'
+    assert info['speech_chunks'] == speech_chunks
+    assert info['input_len'] == 7
 
 def test_generate_rinna_meaning(mocker):
-    # Mock the tokenizer and model from rinna.transformer_models
-    mocker.patch('rinna.generation.tokenizer', autospec=True)
-    mocker.patch('rinna.generation.model', autospec=True)
+    mock_tokens = [
+        'ひでお「リンナ、『Hello』ってわかる？」',
+        'リンナ「『Hello』っていうのは、こんにちはだよ」',
+        'ひでお「リンナ、『World』ってわかる？」',
+        'リンナ「『World』っていうのは、',
+    ]
+    mock_result = [
+        '世界', 'の', 'ことだよ', '」',
+        'ひでお「リンナ、『Python』ってわかる？」',
+        'リンナ「『Python』っていうのは、プログラミング言語だよ」',
+    ]
 
-    # Define a sample input
+    mocker.patch('rinna.generation.tokenizer.encode', return_value=FakeTokens([mock_tokens]))
+    mocker.patch('rinna.generation.tokenizer.decode', side_effect=lambda x: ''.join(map(str, x)))
+    mocker.patch('rinna.generation.model.generate', return_value=FakeTokens([mock_tokens + mock_result]))
+    mocker.patch('rinna.generation.character_configs', {
+        'りんな': {
+            'meaning_intro': '\n'.join([
+                'ひでお「リンナ、『Hello』ってわかる？」',
+                'リンナ「『Hello』っていうのは、こんにちはだよ」',
+            ]),
+            'name_in_text': 'リンナ',
+        }
+    })
+
     character = 'りんな'
-    word = 'Hello'
+    word = 'World'
 
-    # Call the function with the sample input
     result = generate_rinna_meaning(character, word)
 
-    # Assert that the function calls are as expected
-    tokenizer.encode.assert_called()
-    model.generate.assert_called()
+    expected_input = 'ひでお「リンナ、『Hello』ってわかる？」\nリンナ「『Hello』っていうのは、こんにちはだよ」\nひでお「リンナ、『World』ってわかる？」\nリンナ「『World』っていうのは、'
 
-    # Assert that the result is as expected
-    # This will depend on your specific requirements
+    tokenizer.encode.assert_called_with(expected_input, add_special_tokens=False, return_tensors="pt")
+    model.generate.assert_called()
+    tokenizer.decode.assert_called_with(mock_result)
+
     assert isinstance(result, tuple)
     assert len(result) == 2
+
+    speech_chunks, info = result
+
+    assert isinstance(speech_chunks, list)
+    assert len(speech_chunks) == 1
+    assert speech_chunks[0] == '世界のことだよ'
+
+    assert isinstance(info, dict)
+    assert info['text_input'] == expected_input
+    assert info['output'] == '世界のことだよ」ひでお「リンナ、『Python』ってわかる？」リンナ「『Python』っていうのは、プログラミング言語だよ」'
+    assert info['rinna_speech'] == '世界のことだよ'
+    assert info['speech_chunks'] == speech_chunks
+    assert info['input_len'] == 4

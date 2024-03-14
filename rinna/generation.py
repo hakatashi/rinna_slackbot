@@ -150,7 +150,6 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
 
 def generate_rinna_meaning(character: str, word: str) -> Tuple[List[str], Dict[str, Any]]:
     character_config = character_configs[character]
-
     character_name = character_config['name_in_text']
 
     inquiry_message = f'ひでお「{character_name}、『{word}』ってわかる？」'
@@ -200,6 +199,7 @@ def generate_rinna_meaning(character: str, word: str) -> Tuple[List[str], Dict[s
         rinna_speech = rinna_speech.replace('ワシ', '儂')
 
     speech_chunks = re.findall(r"[^!?！？♪｡。]*[!?！？♪｡。]*", rinna_speech)
+    speech_chunks = list(filter(lambda x: x != '', speech_chunks))
 
     info = {
         'text_input': text_input,
