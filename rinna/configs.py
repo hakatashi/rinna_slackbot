@@ -1,11 +1,26 @@
 import json
 from pathlib import Path
 
-with open(Path(__file__).parent.parent / 'data' / 'users.json', 'r', encoding='utf-8') as f:
-    username_mapping = json.load(f)
+try:
+    with open(Path(__file__).parent.parent / 'data' / 'users.json', 'r', encoding='utf-8') as f:
+        username_mapping = json.load(f)
+except FileNotFoundError:
+    username_mapping = {}
 
-with open(Path(__file__).parent.parent / 'data' / 'intro.json', 'r', encoding='utf-8') as f:
-    intro_mapping = json.load(f)
+try:
+    with open(Path(__file__).parent.parent / 'data' / 'intro.json', 'r', encoding='utf-8') as f:
+        intro_mapping = json.load(f)
+except FileNotFoundError:
+    intro_mapping = {
+        'rinna_intro': 'りんなです',
+        'rinna_inquiry_intro': 'りんなです',
+        'una_intro': 'うなです',
+        'una_inquiry_intro': 'うなです',
+        'una_meaning_intro': 'うなです',
+        'uka_intro': 'うかです',
+        'uno_intro': 'うのです',
+        'tatamo_intro': 'たたもです',
+    }
 
 character_configs = {
     'りんな': {
