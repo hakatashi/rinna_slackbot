@@ -208,7 +208,7 @@ publisher = pubsub_v1.PublisherClient()
 def pubsub_callback(message) -> None:
     data_buf = message.data
     data = json.loads(data_buf.decode())
-    print('received rinna-signal')
+    print(f'received rinna-signal: {data.get("type")} (lastSignal = {data.get("lastSignal")})')
 
     if 'humanMessages' in data and data['type'] == 'rinna-signal' and isinstance(data['humanMessages'], list):
         mutex.acquire()
