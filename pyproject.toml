@@ -19,20 +19,20 @@ azure-cognitiveservices-vision-contentmoderator = "^1.0.0"
 google-cloud-pubsub = "^2.13.11"
 google-cloud-language = "^2.7.0"
 datasets = "^2.9.0"
-sentencepiece = "^0.1.97"
 evaluate = "^0.4.0"
 transformers = {git = "https://github.com/huggingface/transformers"}
 scikit-learn = "^1.2.1"
-torch = {version = "^1.13.1", source = "cu116"}
 psutil = "^5.9.5"
 pytest = "^8.1.1"
 tokenizers = "^0.15.2"
 pytest-mock = "^3.12.0"
+torch = {version = "^2.1.2", source = "cu121"}
+vllm = "^0.3.3"
 
 
 [[tool.poetry.source]]
-name = "cu116"
-url = "https://download.pytorch.org/whl/cu116"
+name = "cu121"
+url = "https://download.pytorch.org/whl/cu121"
 priority = "explicit"
 
 [build-system]
