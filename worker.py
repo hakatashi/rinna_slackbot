@@ -1,7 +1,6 @@
 # coding=utf8
 
 from threading import Lock
-import time
 import random
 import traceback
 from slack_sdk import WebClient
@@ -19,10 +18,11 @@ from io import BytesIO
 from datetime import datetime
 from azure.cognitiveservices.vision.contentmoderator import ContentModeratorClient
 from msrest.authentication import CognitiveServicesCredentials
-from time import sleep
+from time import time, sleep
 from rinna.utils import has_offensive_term
 from rinna.generation import generate_rinna_response, generate_rinna_meaning
 from rinna.configs import character_configs
+from concurrent.futures import ThreadPoolExecutor
 
 print('Worker started')
 
@@ -42,7 +42,6 @@ app = firebase_admin.initialize_app()
 db = firestore.client()
 
 responses_ref = db.collection(u'rinna-responses')
-
 def moderate_message(message):
     document = language_v1.Document(
         content=message,
@@ -50,33 +49,48 @@ def moderate_message(message):
         language="JA",
     )
 
-    classification = language_client.classify_text(
-        request={
-            "document": document,
-            "classification_model_options": {
-                "v2_model": {
-                    "content_categories_version": "V2",
+    def classify_text():
+        print(f'Google moderation text: {message}')
+        start_time = time()
+        classification = language_client.classify_text(
+            request={
+                "document": document,
+                "classification_model_options": {
+                    "v2_model": {
+                        "content_categories_version": "V2",
+                    },
                 },
             },
-        },
-    )
+        )
+        end_time = time()
+        print(f"Google moderation finished. Time taken: {end_time - start_time} seconds")
+        return any(map(lambda category: category.name == '/Adult', classification.categories)), classification._meta.parent.to_dict(classification)
 
-    is_adult = any(map(lambda category: category.name == '/Adult', classification.categories))
+    def screen_text():
+        print(f'Azure moderation text: {message}')
+        start_time = time()
+        screen = content_moderator_client.text_moderation.screen_text(
+            text_content_type='text/plain',
+            text_content=BytesIO(message.encode()),
+            language='jpn',
+            autocorrect=False,
+            pii=False,
+            classify=False
+        )
+        end_time = time()
+        print(f"Azure moderation finished. Time taken: {end_time - start_time} seconds")
+        return has_offensive_term(screen.terms), screen.as_dict()
 
-    screen = content_moderator_client.text_moderation.screen_text(
-        text_content_type='text/plain',
-        text_content=BytesIO(message.encode()),
-        language='jpn',
-        autocorrect=False,
-        pii=False,
-        classify=False
-    )
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_classify_text = executor.submit(classify_text)
+        future_screen_text = executor.submit(screen_text)
 
-    is_offensive = has_offensive_term(screen.terms)
+        is_adult, classification = future_classify_text.result()
+        is_offensive, screen = future_screen_text.result()
 
     moderations = {
-        'google_language_service': classification._meta.parent.to_dict(classification),
-        'azure_content_moderator': screen.as_dict(),
+        'google_language_service': classification,
+        'azure_content_moderator': screen,
     }
 
     return is_adult or is_offensive, moderations
@@ -305,7 +319,7 @@ def pubsub_callback(message) -> None:
     if data['type'] == 'rinna-ping':
         topic_id = data['topicId']
         ts = int(topic_id.split('-')[-1])
-        current_time = time.time() * 1000
+        current_time = time() * 1000
         if current_time - ts > 1000 * 20:
             print(f'Ignoring old ping: {topic_id}')
         else:
