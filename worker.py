@@ -24,6 +24,8 @@ from rinna.utils import has_offensive_term
 from rinna.generation import generate_rinna_response, generate_rinna_meaning
 from rinna.configs import character_configs
 
+print('Worker started')
+
 load_dotenv()
 
 mutex = Lock()

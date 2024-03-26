@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from rinna.utils import get_weekday_str, get_hour_str, normalize_text
 from rinna.configs import character_configs, username_mapping
-from rinna.transformer_models import tokenizer, model
+from rinna.transformer_models import tokenizer, generate_text
 from typing import List, Dict, Tuple
 
 def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> Tuple[List[str], Dict[str, Any]]:
@@ -98,29 +98,11 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
         return ''
 
     input_len = len(token_ids_output[0])
-    print(f'{input_len = }')
+    
+    output, config = generate_text(token_ids_output)
 
-    config = {
-        'do_sample': True,
-        'top_k': 500,
-        'top_p': 1.0,
-        'temperature': 0.8,
-        'repetition_penalty': 1.05,
-        'pad_token_id': tokenizer.pad_token_id,
-        'bos_token_id': tokenizer.bos_token_id,
-        'eos_token_id': tokenizer.eos_token_id,
-        # bad_word_ids=[[tokenizer.unk_token_id]]
-    }
-
-    with torch.no_grad():
-        output_ids = model.generate(
-            token_ids_output.to(model.device),
-            max_length=input_len + 100,
-            min_length=input_len + 100,
-            **config,
-        )
-
-    output = tokenizer.decode(output_ids.tolist()[0][input_len:])
+    if output is None:
+        return None, None
 
     rinna_speech = output.split('」')[0]
     rinna_speech = rinna_speech.replace('[UNK]', '')
@@ -159,33 +141,13 @@ def generate_rinna_meaning(character: str, word: str) -> Tuple[List[str], Dict[s
 
     token_ids = tokenizer.encode(
         text_input, add_special_tokens=False, return_tensors="pt")
+
     input_len = len(token_ids[0])
+    
+    output, config = generate_text(token_ids)
 
-    print(f'{input_len = }')
-    if input_len > 920:
-        return None
-
-    config = {
-        'do_sample': True,
-        'top_k': 500,
-        'top_p': 1.0,
-        'temperature': 0.8,
-        'repetition_penalty': 1.05,
-        'pad_token_id': tokenizer.pad_token_id,
-        'bos_token_id': tokenizer.bos_token_id,
-        'eos_token_id': tokenizer.eos_token_id,
-        # bad_word_ids=[[tokenizer.unk_token_id]]
-    }
-
-    with torch.no_grad():
-        output_ids = model.generate(
-            token_ids.to(model.device),
-            max_length=input_len + 100,
-            min_length=input_len + 100,
-            **config,
-        )
-
-    output = tokenizer.decode(output_ids.tolist()[0][input_len:])
+    if output is None:
+        return None, None
 
     rinna_speech = output.split('」')[0]
     rinna_speech = rinna_speech.replace('[UNK]', '')
