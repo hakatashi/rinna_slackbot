@@ -10,17 +10,20 @@ is_gpu_mode = torch.cuda.is_available() and len(sys.argv) >= 2 and sys.argv[1] =
 tokenizer = T5Tokenizer.from_pretrained("rinna/japanese-gpt-1b")
 
 if is_gpu_mode:
-    model = LLM(model="rinna/japanese-gpt-1b")
+    model = LLM(
+        model="rinna/japanese-gpt-1b",
+        gpu_memory_utilization=0.5,
+    )
 else:
     model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt-1b")
-    print(f'Using {model.device} for processing rinna-signal')
+    print(f'Using {model.device} for processing rinna-signal', flush=True)
 
 def generate_text(token_ids):
-    print('Generating text...')
+    print('Generating text...', flush=True)
 
     input_len = len(token_ids[0])
-    print(f'{input_len = }')
-    print(f'{is_gpu_mode = }')
+    print(f'{input_len = }', flush=True)
+    print(f'{is_gpu_mode = }', flush=True)
 
     if is_gpu_mode:
         config = {
@@ -42,7 +45,7 @@ def generate_text(token_ids):
         output = response[0].outputs[0].text
         end_time = time()
 
-        print(f"Finished. Time taken: {end_time - start_time} seconds")
+        print(f"Finished. Time taken: {end_time - start_time} seconds", flush=True)
 
         return output, config
     else:
@@ -73,6 +76,6 @@ def generate_text(token_ids):
         output = tokenizer.decode(output_ids.tolist()[0][input_len:])
         end_time = time()
 
-        print(f"Finished. Time taken: {end_time - start_time} seconds")
+        print(f"Finished. Time taken: {end_time - start_time} seconds", flush=True)
 
         return output, config

@@ -3,7 +3,7 @@ import subprocess
 from PIL import Image
 
 mode = "GPU"
-print(f'mode = {mode}')
+print(f'mode = {mode}', flush=True)
 
 stdout_stream = open('stdout.log', mode='ab')
 stderr_stream = open('stderr.log', mode='ab')

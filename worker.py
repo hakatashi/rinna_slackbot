@@ -23,8 +23,9 @@ from rinna.utils import has_offensive_term
 from rinna.generation import generate_rinna_response, generate_rinna_meaning
 from rinna.configs import character_configs
 from concurrent.futures import ThreadPoolExecutor
+import string
 
-print('Worker started')
+print('Worker started', flush=True)
 
 load_dotenv()
 
@@ -50,7 +51,7 @@ def moderate_message(message):
     )
 
     def classify_text():
-        print(f'Google moderation text: {message}')
+        print(f'Google moderation text: {message}', flush=True)
         start_time = time()
         classification = language_client.classify_text(
             request={
@@ -63,11 +64,11 @@ def moderate_message(message):
             },
         )
         end_time = time()
-        print(f"Google moderation finished. Time taken: {end_time - start_time} seconds")
+        print(f"Google moderation finished. Time taken: {end_time - start_time} seconds", flush=True)
         return any(map(lambda category: category.name == '/Adult', classification.categories)), classification._meta.parent.to_dict(classification)
 
     def screen_text():
-        print(f'Azure moderation text: {message}')
+        print(f'Azure moderation text: {message}', flush=True)
         start_time = time()
         screen = content_moderator_client.text_moderation.screen_text(
             text_content_type='text/plain',
@@ -78,7 +79,7 @@ def moderate_message(message):
             classify=False
         )
         end_time = time()
-        print(f"Azure moderation finished. Time taken: {end_time - start_time} seconds")
+        print(f"Azure moderation finished. Time taken: {end_time - start_time} seconds", flush=True)
         return has_offensive_term(screen.terms), screen.as_dict()
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -114,7 +115,7 @@ def rinna_response(messages, character, dry_run=False):
             rinna_message = '##### CENSORED #####'
 
         if dry_run:
-            print(f'Output: {rinna_message}')
+            print(f'Output: {rinna_message}', flush=True)
             continue
 
         api_response = slack_client.chat_postMessage(
@@ -124,7 +125,9 @@ def rinna_response(messages, character, dry_run=False):
             username=character_config['slack_user_name']
         )
 
-        responses_ref.add({
+        response_id = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(20))
+
+        responses_ref.document(response_id).set({
             'createdAt': datetime.now(),
             'character': character,
             'inputMessages': messages,
@@ -138,7 +141,7 @@ def rinna_response(messages, character, dry_run=False):
             'moderations': moderations,
         })
 
-    return speech_chunks
+    return '。'.join(speech_chunks)
 
 def rinna_meaning(word, ts = None, character = 'うな', dry_run = False):
     character_config = character_configs[character]
@@ -167,7 +170,7 @@ def rinna_meaning(word, ts = None, character = 'うな', dry_run = False):
             rinna_message = '##### CENSORED #####'
 
         if dry_run:
-            print(f'Output: {rinna_message}')
+            print(f'Output: {rinna_message}', flush=True)
             continue
 
         post_message_kwargs = {
@@ -183,7 +186,9 @@ def rinna_meaning(word, ts = None, character = 'うな', dry_run = False):
 
         api_response = slack_client.chat_postMessage(**post_message_kwargs)
 
-        responses_ref.add({
+        response_id = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(20))
+
+        responses_ref.document(response_id).set({
             'createdAt': datetime.now(),
             'character': character,
             'inputMessages': [],
@@ -224,7 +229,7 @@ publisher = pubsub_v1.PublisherClient()
 def pubsub_callback(message) -> None:
     data_buf = message.data
     data = json.loads(data_buf.decode())
-    print(f'received rinna-signal: {data.get("type")} (lastSignal = {data.get("lastSignal")})')
+    print(f'received rinna-signal: {data.get("type")} (lastSignal = {data.get("lastSignal")})', flush=True)
 
     if 'humanMessages' in data and data['type'] == 'rinna-signal' and isinstance(data['humanMessages'], list):
         mutex.acquire()
@@ -288,16 +293,16 @@ def pubsub_callback(message) -> None:
                     if '皿洗' in trigger_text:
                         character = random.choice(['うか', 'うの'])
                     else:
-                        print('random.choice')
+                        print('random.choice', flush=True)
                         character = random.choice(['りんな', 'うな', 'うか', 'うの', 'たたも'])
-                        print(f'character = {character}')
+                        print(f'character = {character}', flush=True)
                     rinna_response(data['humanMessages'], character)
 
             message.ack()
 
         except Exception as e:
             traceback.print_exc()
-            print(e)
+            print(e, flush=True)
 
         finally:
             mutex.release()
@@ -311,7 +316,7 @@ def pubsub_callback(message) -> None:
 
         except Exception as e:
             traceback.print_exc()
-            print(e)
+            print(e, flush=True)
 
         finally:
             mutex.release()
@@ -321,7 +326,7 @@ def pubsub_callback(message) -> None:
         ts = int(topic_id.split('-')[-1])
         current_time = time() * 1000
         if current_time - ts > 1000 * 20:
-            print(f'Ignoring old ping: {topic_id}')
+            print(f'Ignoring old ping: {topic_id}', flush=True)
         else:
             topic_path = publisher.topic_path(project_id, topic_id)
             publish_future = publisher.publish(topic_path, json.dumps({
@@ -329,19 +334,19 @@ def pubsub_callback(message) -> None:
                 'mode': sys.argv[1],
             }).encode())
 
-            print(publish_future.result())
+            print(publish_future.result(), flush=True)
 
         message.ack()
 
 
 streaming_pull_future = subscriber.subscribe(subscription_path, callback=pubsub_callback)
 def cancel(signum, frame):
-    print('Received signal', signum)
+    print('Received signal', signum, flush=True)
     streaming_pull_future.cancel()
 signal.signal(signal.SIGINT, cancel)
 signal.signal(signal.SIGTERM, cancel)
 
-print(f"Listening for messages on {subscription_path}..\n")
+print(f"Listening for messages on {subscription_path}..\n", flush=True)
 
 with subscriber:
     try:

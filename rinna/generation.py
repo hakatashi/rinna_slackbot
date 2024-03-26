@@ -14,7 +14,7 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
     last_message_text = messages[-1]['text'] or ''
     is_inquiry = last_message_text.endswith('？') or last_message_text.endswith('?')
 
-    print(f'{is_inquiry = }')
+    print(f'{is_inquiry = }', flush=True)
 
     token_ids_output: Any = None
     if is_inquiry and 'inquiry_intro' in character_config:
@@ -94,15 +94,15 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
                 token_ids_output = token_ids
 
     if token_ids_output is None:
-        print('token_ids_output is empty. Quitting...')
-        return ''
+        print('token_ids_output is empty. Quitting...', flush=True)
+        return '', {}
 
     input_len = len(token_ids_output[0])
     
     output, config = generate_text(token_ids_output)
 
     if output is None:
-        return None, None
+        return '', {}
 
     rinna_speech = output.split('」')[0]
     rinna_speech = rinna_speech.replace('[UNK]', '')
