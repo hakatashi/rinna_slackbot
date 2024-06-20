@@ -39,3 +39,28 @@ def has_offensive_term(terms):
     if terms is None:
         return False
     return any(map(lambda term: term.term not in MODERATION_ALLOWLIST, terms))
+
+def normalize_speech_chunk(chunk):
+    if re.search(r'[。｡]$', chunk) and not re.search(r'[。｡]{2,}$', chunk):
+        return re.sub(r'[。｡]$', '', chunk)
+    return chunk
+
+def split_speech_to_chunks(speech):
+    chunks = []
+    current_chunk = ''
+    is_inside_parentheses = False
+    for i, c in enumerate(speech):
+        current_chunk += c
+        if regex.match(r'\p{Ps}', c):
+            is_inside_parentheses = True
+        elif regex.match(r'\p{Pe}', c):
+            is_inside_parentheses = False
+        elif c in '!?！？♪｡。' and not is_inside_parentheses:
+            if i + 1 < len(speech) and speech[i + 1] in '!?！？♪｡。':
+                continue
+            chunks.append(current_chunk)
+            current_chunk = ''
+    if current_chunk != '':
+        chunks.append(current_chunk)
+    normalized_chunks = list(map(normalize_speech_chunk, chunks))
+    return normalized_chunks

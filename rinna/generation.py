@@ -1,8 +1,7 @@
 import re
-import torch
 from datetime import datetime
 from typing import Any
-from rinna.utils import get_weekday_str, get_hour_str, normalize_text
+from rinna.utils import get_weekday_str, get_hour_str, normalize_text, split_speech_to_chunks
 from rinna.configs import character_configs, username_mapping
 from rinna.transformer_models import tokenizer, generate_text
 from typing import List, Dict, Tuple
@@ -118,8 +117,7 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
     if character == 'たたも':
         rinna_speech = rinna_speech.replace('ワシ', '儂')
 
-    speech_chunks = re.findall(r"[^!?！？♪｡。]*[!?！？♪｡。]*", rinna_speech)
-    speech_chunks = list(filter(lambda x: x != '', speech_chunks))
+    speech_chunks = split_speech_to_chunks(rinna_speech)
 
     info = {
         'text_input': text_input,
@@ -163,8 +161,7 @@ def generate_rinna_meaning(character: str, word: str) -> Tuple[List[str], Dict[s
     if character == 'たたも':
         rinna_speech = rinna_speech.replace('ワシ', '儂')
 
-    speech_chunks = re.findall(r"[^!?！？♪｡。]*[!?！？♪｡。]*", rinna_speech)
-    speech_chunks = list(filter(lambda x: x != '', speech_chunks))
+    speech_chunks = split_speech_to_chunks(rinna_speech)
 
     info = {
         'text_input': text_input,
