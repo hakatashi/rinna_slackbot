@@ -21,7 +21,7 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
         formatted_dialog = f'質問「{last_message_text}」'
         text_input = character_config['inquiry_intro'] + '\n' + formatted_dialog + '\n' + '回答「'
         token_ids_output = tokenizer.encode(
-            text_input, add_special_tokens=False, return_tensors="pt")
+            text_input, add_special_tokens=True, return_tensors="pt")
     else:
         formatted_messages = []
         for message in messages:
@@ -66,6 +66,7 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
         formatted_messages.reverse()
         text_input = ''
         formatted_dialog = ''
+        print(formatted_messages)
 
         for formatted_message in formatted_messages:
             formatted_messages_bin.insert(0, formatted_message)
@@ -85,10 +86,12 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
             text_input = text_input.replace(r'[WEATHER]', 'くもり')
 
             token_ids = tokenizer.encode(
-                text_input, add_special_tokens=False, return_tensors="pt")
+                text_input, add_special_tokens=True, return_tensors="pt")
+            print(token_ids)
             input_len = len(token_ids[0])
+            print(input_len)
 
-            if input_len > 920:
+            if input_len > 1900:
                 break
             else:
                 token_ids_output = token_ids
