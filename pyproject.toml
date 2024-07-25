@@ -8,7 +8,7 @@ readme = "README.md"
 packages = [{ include = "**/*" }]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.10,<3.12"
 slack-sdk = "^3.19.4"
 regex = "^2022.10.31"
 python-dotenv = "^0.21.0"
@@ -20,19 +20,26 @@ google-cloud-pubsub = "^2.13.11"
 google-cloud-language = "^2.7.0"
 datasets = "^2.9.0"
 evaluate = "^0.4.0"
-transformers = {git = "https://github.com/huggingface/transformers"}
+transformers = "^4.43.2"
 scikit-learn = "^1.2.1"
 psutil = "^5.9.5"
 pytest = "^8.1.1"
-tokenizers = "^0.15.2"
+tokenizers = "^0.19.1"
 pytest-mock = "^3.12.0"
-torch = {version = "^2.1.2", source = "cu121"}
+torch = {version = "^2.1.2", source = "torch_cu121"}
 vllm = "^0.3.3"
+gstop = "^0.2.3"
+llama-cpp-python = {version = "^0.2.0", source = "llama_cpp_cu121"}
 
 
 [[tool.poetry.source]]
-name = "cu121"
+name = "torch_cu121"
 url = "https://download.pytorch.org/whl/cu121"
+priority = "explicit"
+
+[[tool.poetry.source]]
+name = "llama_cpp_cu121"
+url = "https://abetlen.github.io/llama-cpp-python/whl/cu121"
 priority = "explicit"
 
 [build-system]

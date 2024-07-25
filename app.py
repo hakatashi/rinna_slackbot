@@ -11,8 +11,10 @@ stderr_stream = open('stderr.log', mode='ab')
 worker_process = subprocess.Popen(
     [
         'C:\\Windows\\system32\\wsl.exe',
+        '-d',
+        'Ubuntu-24.04',
         '-e',
-        '/home/hakatashi/.pyenv/shims/poetry',
+        '/home/hakatashi/.local/bin/poetry',
         'run',
         'python',
         '-u',
@@ -47,8 +49,10 @@ def mode_switch_action(new_mode):
     worker_process = subprocess.Popen(
         [
             'C:\\Windows\\system32\\wsl.exe',
+            '-d',
+            'Ubuntu-24.04',
             '-e',
-            '/home/hakatashi/.pyenv/shims/poetry',
+            '/home/hakatashi/.local/bin/poetry',
             'run',
             'python',
             '-u',
