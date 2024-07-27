@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 from rinna.utils import get_weekday_str, get_hour_str, normalize_text, split_speech_to_chunks
 from rinna.configs import character_configs, username_mapping
-from rinna.transformer_models import tokenizer, generate_text
+from rinna.transformer_models import generate_text, get_token_ids
 from typing import List, Dict, Tuple
 
 def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> Tuple[List[str], Dict[str, Any]]:
@@ -19,8 +19,7 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
     if is_inquiry and 'inquiry_intro' in character_config:
         formatted_dialog = f'質問「{last_message_text}」'
         text_input = character_config['inquiry_intro'] + '\n' + formatted_dialog + '\n' + '回答「'
-        token_ids_output = tokenizer.encode(
-            text_input, add_special_tokens=True, return_tensors="pt")
+        token_ids_output = get_token_ids(text_input)
     else:
         formatted_messages = []
         for message in messages:
@@ -65,7 +64,6 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
         formatted_messages.reverse()
         text_input = ''
         formatted_dialog = ''
-        print(formatted_messages)
 
         for formatted_message in formatted_messages:
             formatted_messages_bin.insert(0, formatted_message)
@@ -84,11 +82,9 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
             text_input = text_input.replace(r'[MINUTE]', str(date.minute))
             text_input = text_input.replace(r'[WEATHER]', 'くもり')
 
-            token_ids = tokenizer.encode(
-                text_input, add_special_tokens=True, return_tensors="pt")
-            print(token_ids)
+            token_ids = get_token_ids(text_input)
             input_len = len(token_ids[0])
-            print(input_len)
+            print(f'{input_len = }', flush=True)
 
             if input_len > 1900:
                 break
@@ -140,8 +136,7 @@ def generate_rinna_meaning(character: str, word: str) -> Tuple[List[str], Dict[s
 
     text_input = character_config['meaning_intro'] + '\n' + inquiry_message + '\n' + response_message
 
-    token_ids = tokenizer.encode(
-        text_input, add_special_tokens=False, return_tensors="pt")
+    token_ids = get_token_ids(text_input)
 
     input_len = len(token_ids[0])
     

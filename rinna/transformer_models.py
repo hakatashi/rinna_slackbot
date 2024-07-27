@@ -72,3 +72,8 @@ def generate_text(token_ids):
     print(f"Finished. Time taken: {end_time - start_time} seconds", flush=True)
 
     return output, config
+
+def get_token_ids(text_input):
+    token_ids = tokenizer.encode(
+        text_input, add_special_tokens=False, return_tensors="pt")
+    return token_ids
