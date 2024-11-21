@@ -29,7 +29,7 @@ pytest-mock = "^3.12.0"
 torch = {version = "^2.1.2", source = "torch_cu121"}
 vllm = "^0.3.3"
 gstop = "^0.2.3"
-llama-cpp-python = {version = "^0.2.0", source = "llama_cpp_cu121"}
+llama-cpp-python = {version = "^0.2.90", source = "llama_cpp_cu121"}
 
 
 [[tool.poetry.source]]
