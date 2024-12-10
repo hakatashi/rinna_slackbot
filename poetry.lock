@@ -1671,19 +1671,19 @@ regex = ["regex"]
 
 [[package]]
 name = "llama-cpp-python"
-version = "0.2.82"
+version = "0.3.4"
 description = "Python bindings for the llama.cpp library"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "llama_cpp_python-0.2.82-cp310-cp310-linux_x86_64.whl", hash = "sha256:8d59093534ce26f4d726ef64d64963ba31187645c3b3025d48d27c2d862d374d"},
-    {file = "llama_cpp_python-0.2.82-cp310-cp310-win_amd64.whl", hash = "sha256:4b3a5b9da4262b8b4f423e50d58095c204ae518d2c6ad5b1e065d9436f6d7c15"},
-    {file = "llama_cpp_python-0.2.82-cp311-cp311-linux_x86_64.whl", hash = "sha256:8faeb9347543e9752c3dc117cd2f4d214a158444d648f6ddf0b9c360e96f2694"},
-    {file = "llama_cpp_python-0.2.82-cp311-cp311-win_amd64.whl", hash = "sha256:3461035c29258ba69cc6e877c23590b0b55df797c6a2b588f54ab5f83a909685"},
-    {file = "llama_cpp_python-0.2.82-cp312-cp312-linux_x86_64.whl", hash = "sha256:3adc298c2e19e0be71e4df9e2efc84c0c7fc93feef7447f34e41ad41f9d80f03"},
-    {file = "llama_cpp_python-0.2.82-cp312-cp312-win_amd64.whl", hash = "sha256:a11214444dbf55e1f68ee5e5d1c2de86c5d875b5bafb5866fed9792e497d3e1c"},
-    {file = "llama_cpp_python-0.2.82-cp39-cp39-linux_x86_64.whl", hash = "sha256:908083cedb5d0c5538ce7094a3df67f0ad43f3c5c2f73ecbed8d5beee959a9d9"},
-    {file = "llama_cpp_python-0.2.82-cp39-cp39-win_amd64.whl", hash = "sha256:fdd2dfeb5e9c6b650c6bd4ac4fd2883140c323ba50bb10f884a3f92989c9b1ea"},
+    {file = "llama_cpp_python-0.3.4-cp310-cp310-linux_x86_64.whl", hash = "sha256:3fdfaa0e63602b46f9a320247d11fdc2a6685b9c45047c6168cffb5e333d1c72"},
+    {file = "llama_cpp_python-0.3.4-cp310-cp310-win_amd64.whl", hash = "sha256:626804da610821a5c2c8865126637a49e6e6e5de34ac4e9a74234dcad20939e7"},
+    {file = "llama_cpp_python-0.3.4-cp311-cp311-linux_x86_64.whl", hash = "sha256:83419f1141b5c5f648e9fa3c17da5a6d5e7518d0c513a98559cbd931f01651f0"},
+    {file = "llama_cpp_python-0.3.4-cp311-cp311-win_amd64.whl", hash = "sha256:3e70b1e0e9699540b3d7ee6117aeb7cac907de38a43942e692ace41d16d48407"},
+    {file = "llama_cpp_python-0.3.4-cp312-cp312-linux_x86_64.whl", hash = "sha256:8f52de9f40046ff95c7ea9ab413e2d1be11f3f3ba68d55bb16a16fc1be4f225f"},
+    {file = "llama_cpp_python-0.3.4-cp312-cp312-win_amd64.whl", hash = "sha256:580a0f7fc148177acff5b88f082785be3c2f45704e47714c4f33766c860fb789"},
+    {file = "llama_cpp_python-0.3.4-cp39-cp39-linux_x86_64.whl", hash = "sha256:b8ce62d72640f34e4f9f4f4273d5babae8278b1cc241b0ebc96784279bf1afd6"},
+    {file = "llama_cpp_python-0.3.4-cp39-cp39-win_amd64.whl", hash = "sha256:2962ce57dd96c6e4fbbe1143d977db1273ba20d520e6852f17fc901089eeb469"},
 ]
 
 [package.dependencies]
@@ -1696,7 +1696,7 @@ typing-extensions = ">=4.5.0"
 all = ["llama_cpp_python[dev,server,test]"]
 dev = ["black (>=23.3.0)", "httpx (>=0.24.1)", "mkdocs (>=1.4.3)", "mkdocs-material (>=9.1.18)", "mkdocstrings[python] (>=0.22.0)", "pytest (>=7.4.0)", "twine (>=4.0.2)"]
 server = ["PyYAML (>=5.1)", "fastapi (>=0.100.0)", "pydantic-settings (>=2.0.1)", "sse-starlette (>=1.6.1)", "starlette-context (>=0.3.6,<0.4)", "uvicorn (>=0.22.0)"]
-test = ["httpx (>=0.24.1)", "pytest (>=7.4.0)", "scipy (>=1.10)"]
+test = ["fastapi (>=0.100.0)", "httpx (>=0.24.1)", "huggingface-hub (>=0.23.0)", "pydantic-settings (>=2.0.1)", "pytest (>=7.4.0)", "scipy (>=1.10)", "sse-starlette (>=1.6.1)", "starlette-context (>=0.3.6,<0.4)"]
 
 [package.source]
 type = "legacy"
@@ -4657,4 +4657,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.12"
-content-hash = "8ae1941214c39e17e960b3bb5665b93743c76720a896955a9cce4a4676bb6dce"
+content-hash = "d90300e1b72871d42f2f0729fdac6cc891d4006f93c1e2c6af8676fe9315a241"
