@@ -1,4 +1,6 @@
-# FILEPATH: /c:/Users/hakatashi/Documents/GitHub/rinna_slackbot/tests/rinna/test_generation.py
+import os
+
+os.environ["LLAMA_USE_GPU"] = "0"
 
 from rinna.generation import generate_rinna_response, generate_rinna_meaning
 from rinna.transformer_models import tokenizer, model
