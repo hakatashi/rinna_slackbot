@@ -5,20 +5,27 @@ from rinna.utils import get_weekday_str, get_hour_str, normalize_text, split_spe
 from rinna.configs import character_configs, username_mapping
 from rinna.transformer_models import generate_text, get_token_ids
 from typing import List, Dict, Tuple
+from logging import getLogger, INFO
+
+logger = getLogger(__name__)
+logger.setLevel(INFO)
+
 
 def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> Tuple[List[str], Dict[str, Any]]:
     character_config = character_configs[character]
     name_in_text = character_config['name_in_text']
 
     last_message_text = messages[-1]['text'] or ''
-    is_inquiry = last_message_text.endswith('？') or last_message_text.endswith('?')
+    is_inquiry = last_message_text.endswith(
+        '？') or last_message_text.endswith('?')
 
-    print(f'{is_inquiry = }', flush=True)
+    logger.info(f'{is_inquiry = }')
 
     token_ids_output: Any = None
     if is_inquiry and 'inquiry_intro' in character_config:
         formatted_dialog = f'質問「{last_message_text}」'
-        text_input = character_config['inquiry_intro'] + '\n' + formatted_dialog + '\n' + '回答「'
+        text_input = character_config['inquiry_intro'] + \
+            '\n' + formatted_dialog + '\n' + '回答「'
         token_ids_output = get_token_ids(text_input)
     else:
         formatted_messages = []
@@ -57,7 +64,7 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
                     'text': text,
                     'user': user,
                 })
-        
+
         token_ids_output = None
         formatted_messages_bin = []
 
@@ -71,32 +78,34 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
             formatted_dialog = '\n'.join(map(
                 lambda message: message['user'] + '「' + message['text'] + '」', formatted_messages_bin))
 
-            text_input = character_config['intro'] + '\n\n' + formatted_dialog + f'\n{name_in_text}「'
+            text_input = character_config['intro'] + \
+                '\n\n' + formatted_dialog + f'\n{name_in_text}「'
 
             date = datetime.now()
 
             text_input = text_input.replace(r'[MONTH]', str(date.month))
             text_input = text_input.replace(r'[DATE]', str(date.day))
-            text_input = text_input.replace(r'[WEEKDAY]', get_weekday_str(date.weekday()))
+            text_input = text_input.replace(
+                r'[WEEKDAY]', get_weekday_str(date.weekday()))
             text_input = text_input.replace(r'[HOUR]', get_hour_str(date.hour))
             text_input = text_input.replace(r'[MINUTE]', str(date.minute))
             text_input = text_input.replace(r'[WEATHER]', 'くもり')
 
             token_ids = get_token_ids(text_input)
             input_len = len(token_ids[0])
-            print(f'{input_len = }', flush=True)
+            logger.info(f'{input_len = }')
 
-            if input_len > 1900:
+            if input_len > 2900:
                 break
             else:
                 token_ids_output = token_ids
 
     if token_ids_output is None:
-        print('token_ids_output is empty. Quitting...', flush=True)
+        logger.info('token_ids_output is empty. Quitting...')
         return '', {}
 
     input_len = len(token_ids_output[0])
-    
+
     output, config = generate_text(token_ids_output)
 
     if output is None:
@@ -127,6 +136,7 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
 
     return speech_chunks, info
 
+
 def generate_rinna_meaning(character: str, word: str) -> Tuple[List[str], Dict[str, Any]]:
     character_config = character_configs[character]
     character_name = character_config['name_in_text']
@@ -134,12 +144,13 @@ def generate_rinna_meaning(character: str, word: str) -> Tuple[List[str], Dict[s
     inquiry_message = f'ひでお「{character_name}、『{word}』ってわかる？」'
     response_message = f'{character_name}「『{word}』っていうのは、'
 
-    text_input = character_config['meaning_intro'] + '\n' + inquiry_message + '\n' + response_message
+    text_input = character_config['meaning_intro'] + \
+        '\n' + inquiry_message + '\n' + response_message
 
     token_ids = get_token_ids(text_input)
 
     input_len = len(token_ids[0])
-    
+
     output, config = generate_text(token_ids)
 
     if output is None:

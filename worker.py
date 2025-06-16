@@ -22,10 +22,14 @@ from time import time, sleep
 from rinna.utils import has_offensive_term
 from rinna.generation import generate_rinna_response, generate_rinna_meaning
 from rinna.configs import character_configs
+from rinna.llm_benchmark import score_response, update_form_scores
 from concurrent.futures import ThreadPoolExecutor
 import string
+from logging import getLogger
 
-print('Worker started', flush=True)
+logger = getLogger(__name__)
+
+logger.info('Worker started')
 
 load_dotenv()
 
@@ -43,6 +47,8 @@ app = firebase_admin.initialize_app()
 db = firestore.client()
 
 responses_ref = db.collection(u'rinna-responses')
+
+
 def moderate_message(message):
     document = language_v1.Document(
         content=message,
@@ -51,7 +57,7 @@ def moderate_message(message):
     )
 
     def classify_text():
-        print(f'Google moderation text: {message}', flush=True)
+        logger.info(f'Google moderation text: {message}')
         start_time = time()
         classification = language_client.classify_text(
             request={
@@ -64,11 +70,12 @@ def moderate_message(message):
             },
         )
         end_time = time()
-        print(f"Google moderation finished. Time taken: {end_time - start_time} seconds", flush=True)
+        logger.info(
+            f"Google moderation finished. Time taken: {end_time - start_time} seconds")
         return any(map(lambda category: category.name == '/Adult', classification.categories)), classification._meta.parent.to_dict(classification)
 
     def screen_text():
-        print(f'Azure moderation text: {message}', flush=True)
+        logger.info(f'Azure moderation text: {message}')
         start_time = time()
         screen = content_moderator_client.text_moderation.screen_text(
             text_content_type='text/plain',
@@ -79,7 +86,8 @@ def moderate_message(message):
             classify=False
         )
         end_time = time()
-        print(f"Azure moderation finished. Time taken: {end_time - start_time} seconds", flush=True)
+        logger.info(
+            f"Azure moderation finished. Time taken: {end_time - start_time} seconds")
         return has_offensive_term(screen.terms), screen.as_dict()
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -96,8 +104,10 @@ def moderate_message(message):
 
     return is_adult or is_offensive, moderations
 
-def rinna_response(messages, character, dry_run=False):
+
+def rinna_response(messages, character, dry_run=False, thread_ts=None):
     character_config = character_configs[character]
+    logger.info(f'thread_ts = {thread_ts}')
 
     speech_chunks, info = generate_rinna_response(messages, character)
 
@@ -115,17 +125,28 @@ def rinna_response(messages, character, dry_run=False):
             rinna_message = '##### CENSORED #####'
 
         if dry_run:
-            print(f'Output: {rinna_message}', flush=True)
+            logger.info(f'Output: {rinna_message}')
             continue
 
+        if thread_ts is None:
+            thread_options = {}
+        else:
+            thread_options = {
+                'thread_ts': thread_ts,
+                'reply_broadcast': True,
+            }
+
+        logger.info(f'thread_options = {thread_options}')
         api_response = slack_client.chat_postMessage(
             text=rinna_message,
             channel='C7AAX50QY',
             icon_url=character_config['slack_user_icon'],
-            username=character_config['slack_user_name']
+            username=character_config['slack_user_name'],
+            **thread_options,
         )
 
-        response_id = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(20))
+        response_id = ''.join(random.choice(
+            string.ascii_letters + string.digits) for _ in range(20))
 
         responses_ref.document(response_id).set({
             'createdAt': datetime.now(),
@@ -139,11 +160,13 @@ def rinna_response(messages, character, dry_run=False):
             'config': info['config'],
             'message': api_response.data,
             'moderations': moderations,
+            'thread_ts': thread_ts,
         })
 
     return '。'.join(speech_chunks)
 
-def rinna_meaning(word, ts = None, character = 'うな', dry_run = False):
+
+def rinna_meaning(word, ts=None, character='うな', dry_run=False):
     character_config = character_configs[character]
 
     if 'meaning_intro' not in character_config:
@@ -170,7 +193,7 @@ def rinna_meaning(word, ts = None, character = 'うな', dry_run = False):
             rinna_message = '##### CENSORED #####'
 
         if dry_run:
-            print(f'Output: {rinna_message}', flush=True)
+            logger.info(f'Output: {rinna_message}')
             continue
 
         post_message_kwargs = {
@@ -186,7 +209,8 @@ def rinna_meaning(word, ts = None, character = 'うな', dry_run = False):
 
         api_response = slack_client.chat_postMessage(**post_message_kwargs)
 
-        response_id = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(20))
+        response_id = ''.join(random.choice(
+            string.ascii_letters + string.digits) for _ in range(20))
 
         responses_ref.document(response_id).set({
             'createdAt': datetime.now(),
@@ -202,12 +226,13 @@ def rinna_meaning(word, ts = None, character = 'うな', dry_run = False):
             'moderations': moderations,
         })
 
+
 '''
 for word in ['拙斎詩鈔', '太平洋諸島フォーラム', '備後の山中', '十把', 'クラスター', '死亡時画像診断', '耐えうる', '厄払いの図柄', 'アバイ', '自然エネルギー', 'RPS法', '徘徊したがる']:
     rinna_meaning(word, None, 'うな', True)
 
 for i in range(10):
-    print(rinna_response([
+    logger.info(rinna_response([
         {
             'user': 'U04G7TL4P',
             'text': 'たたもって何歳なんだろう',
@@ -224,18 +249,28 @@ subscriber = pubsub_v1.SubscriberClient()
 subscription_path = subscriber.subscription_path(project_id, subscription_id)
 
 publisher = pubsub_v1.PublisherClient()
+processed_submission_ids = set()
 
 
 def pubsub_callback(message) -> None:
     data_buf = message.data
     data = json.loads(data_buf.decode())
-    print(f'received rinna-signal: {data.get("type")} (lastSignal = {data.get("lastSignal")})', flush=True)
+    logger.info(
+        f'received rinna-signal: {data.get("type")} (lastSignal = {data.get("lastSignal")})')
 
     if 'humanMessages' in data and data['type'] == 'rinna-signal' and isinstance(data['humanMessages'], list):
         mutex.acquire()
 
         trigger_text = data['humanMessages'][-1]['text']
+        trigger_ts_str = data['humanMessages'][-1]['ts']
+        trigger_ts = float(trigger_ts_str)
+        now_ts = time()
         rinna_triggered = False
+        logger.info(f'now_ts = {now_ts}, trigger_ts = {trigger_ts}')
+        if now_ts - trigger_ts > 15 * 60:
+            thread_ts = trigger_ts_str
+        else:
+            thread_ts = None
 
         try:
             if '@うな先生' in trigger_text:
@@ -245,7 +280,8 @@ def pubsub_callback(message) -> None:
 
             else:
                 if 'りんな' in trigger_text:
-                    response = rinna_response(data['humanMessages'], 'りんな')
+                    response = rinna_response(
+                        data['humanMessages'], 'りんな', thread_ts=thread_ts)
                     data['humanMessages'].append({
                         'bot_id': 'BEHP604TV',
                         'username': 'りんな',
@@ -254,7 +290,8 @@ def pubsub_callback(message) -> None:
                     rinna_triggered = True
 
                 if 'うな' in trigger_text:
-                    response = rinna_response(data['humanMessages'], 'うな')
+                    response = rinna_response(
+                        data['humanMessages'], 'うな', thread_ts=thread_ts)
                     data['humanMessages'].append({
                         'bot_id': 'BEHP604TV',
                         'username': '今言うな',
@@ -263,7 +300,8 @@ def pubsub_callback(message) -> None:
                     rinna_triggered = True
 
                 if 'うか' in trigger_text:
-                    response = rinna_response(data['humanMessages'], 'うか')
+                    response = rinna_response(
+                        data['humanMessages'], 'うか', thread_ts=thread_ts)
                     data['humanMessages'].append({
                         'bot_id': 'BEHP604TV',
                         'username': '皿洗うか',
@@ -272,7 +310,8 @@ def pubsub_callback(message) -> None:
                     rinna_triggered = True
 
                 if 'うの' in trigger_text:
-                    response = rinna_response(data['humanMessages'], 'うの')
+                    response = rinna_response(
+                        data['humanMessages'], 'うの', thread_ts=thread_ts)
                     data['humanMessages'].append({
                         'bot_id': 'BEHP604TV',
                         'username': '皿洗うの',
@@ -281,7 +320,8 @@ def pubsub_callback(message) -> None:
                     rinna_triggered = True
 
                 if 'たたも' in trigger_text:
-                    response = rinna_response(data['humanMessages'], 'たたも')
+                    response = rinna_response(
+                        data['humanMessages'], 'たたも', thread_ts=thread_ts)
                     data['humanMessages'].append({
                         'bot_id': 'BEHP604TV',
                         'username': '三脚たたも',
@@ -293,16 +333,18 @@ def pubsub_callback(message) -> None:
                     if '皿洗' in trigger_text:
                         character = random.choice(['うか', 'うの'])
                     else:
-                        print('random.choice', flush=True)
-                        character = random.choice(['りんな', 'うな', 'うか', 'うの', 'たたも'])
-                        print(f'character = {character}', flush=True)
-                    rinna_response(data['humanMessages'], character)
+                        logger.info('random.choice')
+                        character = random.choice(
+                            ['りんな', 'うな', 'うか', 'うの', 'たたも'])
+                        logger.info(f'character = {character}')
+                    rinna_response(data['humanMessages'],
+                                   character, thread_ts=thread_ts)
 
             message.ack()
 
         except Exception as e:
-            traceback.print_exc()
-            print(e, flush=True)
+            traceback.logger.info_exc()
+            logger.info(e)
 
         finally:
             mutex.release()
@@ -315,8 +357,8 @@ def pubsub_callback(message) -> None:
             message.ack()
 
         except Exception as e:
-            traceback.print_exc()
-            print(e, flush=True)
+            traceback.logger.info_exc()
+            logger.info(e)
 
         finally:
             mutex.release()
@@ -326,7 +368,7 @@ def pubsub_callback(message) -> None:
         ts = int(topic_id.split('-')[-1])
         current_time = time() * 1000
         if current_time - ts > 1000 * 20:
-            print(f'Ignoring old ping: {topic_id}', flush=True)
+            logger.info(f'Ignoring old ping: {topic_id}')
         else:
             topic_path = publisher.topic_path(project_id, topic_id)
             publish_future = publisher.publish(topic_path, json.dumps({
@@ -334,19 +376,52 @@ def pubsub_callback(message) -> None:
                 'mode': sys.argv[1],
             }).encode())
 
-            print(publish_future.result(), flush=True)
+            logger.info(publish_future.result())
 
         message.ack()
 
+    if data['type'] == 'llm-benchmark-submission':
+        mutex.acquire()
 
-streaming_pull_future = subscriber.subscribe(subscription_path, callback=pubsub_callback)
+        try:
+            logger.info('Processing llm-benchmark-submission...')
+            submission_data = data['data']
+
+            if 'id' in submission_data and submission_data['id'] not in processed_submission_ids:
+                submission_id = submission_data['id']
+                logger.info(f'Processing submission {submission_id}')
+
+                scores = score_response(submission_data)
+                logger.info(f'Scores: {scores}')
+
+                result = update_form_scores(submission_id, scores)
+                print(result)
+
+                processed_submission_ids.add(submission_id)
+
+            message.ack()
+
+        except Exception as e:
+            traceback.logger.info_exc()
+            logger.info(e)
+
+        finally:
+            mutex.release()
+
+
+streaming_pull_future = subscriber.subscribe(
+    subscription_path, callback=pubsub_callback)
+
+
 def cancel(signum, frame):
-    print('Received signal', signum, flush=True)
+    logger.info('Received signal', signum)
     streaming_pull_future.cancel()
+
+
 signal.signal(signal.SIGINT, cancel)
 signal.signal(signal.SIGTERM, cancel)
 
-print(f"Listening for messages on {subscription_path}..\n", flush=True)
+logger.info(f"Listening for messages on {subscription_path}..\n")
 
 with subscriber:
     try:
