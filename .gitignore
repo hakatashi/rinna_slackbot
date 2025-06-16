@@ -133,3 +133,7 @@ finetune
 .vscode
 
 *.7z
+*.wav
+*.mp3
+*.opus
+*.flac
