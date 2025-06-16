@@ -137,3 +137,6 @@ finetune
 *.mp3
 *.opus
 *.flac
+*.txt
+credentials.json
+out.json
