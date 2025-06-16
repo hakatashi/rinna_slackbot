@@ -18,7 +18,7 @@ pystray = "^0.19.4"
 azure-cognitiveservices-vision-contentmoderator = "^1.0.0"
 google-cloud-pubsub = "^2.13.11"
 google-cloud-language = "^2.7.0"
-datasets = "^2.9.0"
+datasets = {extras = ["audio"], version = "^2.21.0"}
 evaluate = "^0.4.0"
 transformers = "^4.43.2"
 scikit-learn = "^1.2.1"
