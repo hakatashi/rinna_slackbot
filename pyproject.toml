@@ -9,7 +9,7 @@ packages = [{ include = "**/*" }]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
-slack-sdk = "^3.19.4"
+slack-sdk = "^3.35.0"
 regex = "^2022.10.31"
 python-dotenv = "^0.21.0"
 google-api-python-client = "^2.66.0"
