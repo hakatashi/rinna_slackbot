@@ -1242,29 +1242,29 @@ protobuf = ">=3.20.2,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4
 
 [[package]]
 name = "google-cloud-pubsub"
-version = "2.27.2"
+version = "2.30.0"
 description = "Google Cloud Pub/Sub API client library"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 files = [
-    {file = "google_cloud_pubsub-2.27.2-py2.py3-none-any.whl", hash = "sha256:a919f84fdea683b0a02464e38dd32332edbcbc8e85da82070079a57791119fd6"},
-    {file = "google_cloud_pubsub-2.27.2.tar.gz", hash = "sha256:d92c156c7ddd0e5125008f977898198d7b1ae766026056497271bec4909647fe"},
+    {file = "google_cloud_pubsub-2.30.0-py3-none-any.whl", hash = "sha256:bd7adabc1b79ba2220529401e34dfd72bfdbdad9132a697b4200012a49281629"},
+    {file = "google_cloud_pubsub-2.30.0.tar.gz", hash = "sha256:26975ed728d2209479f4fb2667e3b3bd70de7605abadf4b301c651c39ed83042"},
 ]
 
 [package.dependencies]
-google-api-core = {version = ">=1.34.0,<2.0.dev0 || >=2.11.dev0,<3.0.0dev", extras = ["grpc"]}
-google-auth = ">=2.14.1,<3.0.0dev"
-grpc-google-iam-v1 = ">=0.12.4,<1.0.0dev"
-grpcio = ">=1.51.3,<2.0dev"
+google-api-core = {version = ">=1.34.0,<2.0.dev0 || >=2.11.dev0,<3.0.0", extras = ["grpc"]}
+google-auth = ">=2.14.1,<3.0.0"
+grpc-google-iam-v1 = ">=0.12.4,<1.0.0"
+grpcio = ">=1.51.3,<2.0.0"
 grpcio-status = ">=1.33.2"
 opentelemetry-api = {version = ">=1.27.0", markers = "python_version >= \"3.8\""}
 opentelemetry-sdk = {version = ">=1.27.0", markers = "python_version >= \"3.8\""}
 proto-plus = [
-    {version = ">=1.22.2,<2.0.0dev", markers = "python_version >= \"3.11\""},
-    {version = ">=1.22.0,<2.0.0dev", markers = "python_version < \"3.11\""},
+    {version = ">=1.22.2,<2.0.0", markers = "python_version >= \"3.11\""},
+    {version = ">=1.22.0,<2.0.0", markers = "python_version < \"3.11\""},
 ]
-protobuf = ">=3.20.2,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<6.0.0dev"
+protobuf = ">=3.20.2,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<7.0.0"
 
 [package.extras]
 libcst = ["libcst (>=0.3.10)"]
@@ -5207,4 +5207,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.12"
-content-hash = "e8cf8786a316e386d703ae408ac2e7850f9e26efc65f3d96ac33e417542e6659"
+content-hash = "0ee645a442d4c2af9291d00c779fb7afef7e292e8c857c3dcd19c8bc67ac45c3"
