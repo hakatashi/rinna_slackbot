@@ -27,7 +27,7 @@ pytest = "^8.4.1"
 tokenizers = "^0.19.1"
 pytest-mock = "^3.14.1"
 torch = {version = "^2.1.2", source = "torch_cu121"}
-vllm = "^0.3.3"
+vllm = "^0.4.0"
 gstop = "^0.2.3"
 llama-cpp-python = {version = "^0.3.4", source = "llama_cpp_cu121"}
 
