@@ -22,7 +22,7 @@ datasets = {extras = ["audio"], version = "^2.21.0"}
 evaluate = "^0.4.0"
 transformers = "^4.43.2"
 scikit-learn = "^1.7.0"
-psutil = "^5.9.5"
+psutil = "^7.0.0"
 pytest = "^8.4.1"
 tokenizers = "^0.19.1"
 pytest-mock = "^3.14.1"
