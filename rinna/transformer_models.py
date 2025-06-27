@@ -47,7 +47,13 @@ if is_llama_mode:
         start_time = time()
 
         output = model.create_completion(
-            token_ids[0], max_tokens=512, stop=["」"], seed=-1)
+            token_ids[0],
+            max_tokens=512,
+            stop=["」"],
+            seed=-1,
+            temperature=0.9,
+            repeat_penalty=1.4,
+        )
         output_text = output["choices"][0]["text"]
 
         end_time = time()
