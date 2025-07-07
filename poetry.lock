@@ -1819,20 +1819,16 @@ tests = ["matplotlib (>=3.5.0)", "packaging (>=20.0)", "pytest", "pytest-cov", "
 
 [[package]]
 name = "llama-cpp-python"
-version = "0.3.4"
+version = "0.3.12"
 description = "Python bindings for the llama.cpp library"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "llama_cpp_python-0.3.4-cp310-cp310-linux_x86_64.whl", hash = "sha256:3fdfaa0e63602b46f9a320247d11fdc2a6685b9c45047c6168cffb5e333d1c72"},
-    {file = "llama_cpp_python-0.3.4-cp310-cp310-win_amd64.whl", hash = "sha256:626804da610821a5c2c8865126637a49e6e6e5de34ac4e9a74234dcad20939e7"},
-    {file = "llama_cpp_python-0.3.4-cp311-cp311-linux_x86_64.whl", hash = "sha256:83419f1141b5c5f648e9fa3c17da5a6d5e7518d0c513a98559cbd931f01651f0"},
-    {file = "llama_cpp_python-0.3.4-cp311-cp311-win_amd64.whl", hash = "sha256:3e70b1e0e9699540b3d7ee6117aeb7cac907de38a43942e692ace41d16d48407"},
-    {file = "llama_cpp_python-0.3.4-cp312-cp312-linux_x86_64.whl", hash = "sha256:8f52de9f40046ff95c7ea9ab413e2d1be11f3f3ba68d55bb16a16fc1be4f225f"},
-    {file = "llama_cpp_python-0.3.4-cp312-cp312-win_amd64.whl", hash = "sha256:580a0f7fc148177acff5b88f082785be3c2f45704e47714c4f33766c860fb789"},
-    {file = "llama_cpp_python-0.3.4-cp39-cp39-linux_x86_64.whl", hash = "sha256:b8ce62d72640f34e4f9f4f4273d5babae8278b1cc241b0ebc96784279bf1afd6"},
-    {file = "llama_cpp_python-0.3.4-cp39-cp39-win_amd64.whl", hash = "sha256:2962ce57dd96c6e4fbbe1143d977db1273ba20d520e6852f17fc901089eeb469"},
+    {file = "llama_cpp_python-0.3.12-cp310-cp310-linux_x86_64.whl", hash = "sha256:aa501141db8d3b8246aa2e46e4efb7b84a43d32f1bcde1ba01059fbd861490f5"},
+    {file = "llama_cpp_python-0.3.12-cp311-cp311-linux_x86_64.whl", hash = "sha256:1da301a3b80a5d55142d30acd96a37a5df493cda8ba37e115a76b7ff2876c00b"},
+    {file = "llama_cpp_python-0.3.12-cp312-cp312-linux_x86_64.whl", hash = "sha256:5b313a92205d28ff3462f5bcd65571deb4d38e71137816510a10aee5e9d9d1a6"},
+    {file = "llama_cpp_python-0.3.12-cp39-cp39-linux_x86_64.whl", hash = "sha256:b240d6b054431f1ea7ac5833511233a5442dedcdac16000ad049ebbe624adcd9"},
 ]
 
 [package.dependencies]
@@ -5202,4 +5198,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.12"
-content-hash = "106f1b875e0641fca7f5be8f1f441828223d3a9f512a597071d71153323fcc57"
+content-hash = "fd6a521e094908fe2a41dcc90ad26e8f6f74f8a9d6c20b484652ee05965cdde4"
