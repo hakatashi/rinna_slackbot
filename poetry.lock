@@ -1820,16 +1820,16 @@ tests = ["matplotlib (>=3.5.0)", "packaging (>=20.0)", "pytest", "pytest-cov", "
 
 [[package]]
 name = "llama-cpp-python"
-version = "0.3.15"
+version = "0.3.16"
 description = "Python bindings for the llama.cpp library"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "llama_cpp_python-0.3.15-cp310-cp310-linux_x86_64.whl", hash = "sha256:82c54bfa4ab4d80b9d7a6a90e3ccfd7c9f1211a77387961a460f8161c84628b3"},
-    {file = "llama_cpp_python-0.3.15-cp311-cp311-linux_x86_64.whl", hash = "sha256:a5464fa0a8c5c25778be36879eca85215a9ee3d57fbdb1604f1d1330ae29a01a"},
-    {file = "llama_cpp_python-0.3.15-cp312-cp312-linux_x86_64.whl", hash = "sha256:18e81ea8289d758e857f47495c805f73c6b52217af37d8b95ee17fc821ecc00b"},
-    {file = "llama_cpp_python-0.3.15-cp39-cp39-linux_x86_64.whl", hash = "sha256:5eb5a38f484affdec97f3b1dffaf0755d342e59910a0a0a6589161641741cbaa"},
+    {file = "llama_cpp_python-0.3.16-cp310-cp310-linux_x86_64.whl", hash = "sha256:92d90c7447855ebbea3b63e154059b48e2106f5ff10bb197d7e3ceda16698510"},
+    {file = "llama_cpp_python-0.3.16-cp311-cp311-linux_x86_64.whl", hash = "sha256:8181339afbaece2bba26bbc1bcfa96d9c3f073e0c0c0eb05f6ff1bc1d99a843c"},
+    {file = "llama_cpp_python-0.3.16-cp312-cp312-linux_x86_64.whl", hash = "sha256:1318721662c215891372d0689796ae008c79c79417427de1b6d6928b8d9ee68c"},
+    {file = "llama_cpp_python-0.3.16-cp39-cp39-linux_x86_64.whl", hash = "sha256:6114a21dd2e2e7b85026ed087d4f5f834975c130879bdf069588b097309cf690"},
 ]
 
 [package.dependencies]
@@ -5194,4 +5194,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.12"
-content-hash = "6f870a6269d8e7d4721f877f3f2a3eda926b755fe89dea85f72f631fc16db79b"
+content-hash = "0f6354e60fc8df015611c15a5ce23ccae1bdbafa40668df0b21ef08714092ade"
