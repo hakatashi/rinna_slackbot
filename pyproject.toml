@@ -25,7 +25,7 @@ scikit-learn = "^1.7.1"
 psutil = "^7.0.0"
 pytest = "^8.4.2"
 tokenizers = "^0.19.1"
-pytest-mock = "^3.14.1"
+pytest-mock = "^3.15.0"
 torch = {version = "^2.1.2", source = "torch_cu121"}
 vllm = "^0.4.0"
 gstop = "^0.2.3"
