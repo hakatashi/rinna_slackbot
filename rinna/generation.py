@@ -1,3 +1,4 @@
+from multiprocessing import context
 import re
 from datetime import datetime
 from typing import Any
@@ -9,6 +10,12 @@ from logging import getLogger, INFO
 
 logger = getLogger(__name__)
 logger.setLevel(INFO)
+
+
+def format_message(message):
+    if message['user'] == 'context':
+        return f"({message['text']})"
+    return f"{message['user']}「{message['text']}」"
 
 
 def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> Tuple[List[str], Dict[str, Any]]:
@@ -33,7 +40,22 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
             if message['text'] is None:
                 continue
 
-            text = normalize_text(message['text'])
+            message_text = message['text']
+
+            context_match = re.match(r'^\((.+?)\).+$', message_text)
+            if context_match:
+                context = context_match.group(1)
+                normalized_context = normalize_text(context)
+
+                logger.info(f'Context found: {normalized_context}')
+                message_text = message_text[message_text.index(')') + 1:].strip()
+
+                formatted_messages.append({
+                    'text': normalized_context,
+                    'user': 'context',
+                })
+
+            text = normalize_text(message_text)
 
             if text == '':
                 continue
@@ -75,8 +97,7 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
         for formatted_message in formatted_messages:
             formatted_messages_bin.insert(0, formatted_message)
 
-            formatted_dialog = '\n'.join(map(
-                lambda message: message['user'] + '「' + message['text'] + '」', formatted_messages_bin))
+            formatted_dialog = '\n'.join(map(format_message, formatted_messages_bin))
 
             text_input = character_config['intro'] + \
                 '\n\n' + formatted_dialog + f'\n{name_in_text}「'
