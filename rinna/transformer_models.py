@@ -29,9 +29,10 @@ if is_llama_mode:
     # model_name = "mmnga/japanese-stablelm-base-gamma-7b-gguf"
     # model_file = "japanese-stablelm-base-gamma-7b-q6_K.gguf"
     model_name = "mradermacher/Qwen2.5-14B-GGUF"
+    # model_name = "Mungert/Qwen3-14B-GGUF"
     # model_name = "bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF"
-    # model_file = "Qwen2.5-14B.Q2_K.gguf"
-    model_file = "Qwen2.5-14B.Q4_0.gguf"
+    model_file = "Qwen2.5-14B.Q4_K_S.gguf"
+    # model_file = "Qwen3-14B-q4_k_l.gguf"
     # model_file = "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"
     model_path = hf_hub_download(model_name, filename=model_file)
 
@@ -52,7 +53,7 @@ if is_llama_mode:
             stop=["」"],
             seed=-1,
             temperature=0.9,
-            repeat_penalty=1.4,
+            repeat_penalty=1.6,
         )
         output_text = output["choices"][0]["text"]
 
