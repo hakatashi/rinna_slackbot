@@ -22,7 +22,7 @@ from time import time, sleep
 from rinna.utils import has_offensive_term
 from rinna.generation import generate_rinna_response, generate_rinna_meaning
 from rinna.configs import character_configs
-from rinna.llm_benchmark import score_response, update_form_scores
+# from rinna.llm_benchmark import score_response, update_form_scores
 from concurrent.futures import ThreadPoolExecutor
 import string
 from logging import getLogger
@@ -387,6 +387,7 @@ def pubsub_callback(message) -> None:
             logger.info('Processing llm-benchmark-submission...')
             submission_data = data['data']
 
+            '''
             if 'id' in submission_data and submission_data['id'] not in processed_submission_ids:
                 submission_id = submission_data['id']
                 logger.info(f'Processing submission {submission_id}')
@@ -398,6 +399,7 @@ def pubsub_callback(message) -> None:
                 print(result)
 
                 processed_submission_ids.add(submission_id)
+            '''
 
             message.ack()
 
