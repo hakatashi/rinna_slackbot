@@ -14,13 +14,13 @@ stderr_stream = open('stderr.log', mode='ab')
 
 worker_process = subprocess.Popen(
     [
-        'C:\\Windows\\system32\\wsl.exe',
-        '-d',
-        'Ubuntu',
-        '-e',
-        'sh',
-        '-c',
-        f'PATH=~/.asdf/shims:$PATH /home/hakatashi/.local/bin/poetry run python -u worker.py {mode} Llama',
+        'C:\\Users\\hakatashi\\AppData\\Roaming\\Python\\Scripts\\poetry.exe',
+        'run',
+        'python',
+        '-u',
+        'worker.py',
+        mode,
+        'Llama',
     ],
     stdout=stdout_stream,
     stderr=stderr_stream
@@ -52,13 +52,13 @@ def mode_switch_action(new_mode):
 
     worker_process = subprocess.Popen(
         [
-            'C:\\Windows\\system32\\wsl.exe',
-            '-d',
-            'Ubuntu',
-            '-e',
-            'sh',
-            '-c',
-            f'PATH=~/.asdf/shims:$PATH /home/hakatashi/.local/bin/poetry run python -u worker.py {mode} Llama',
+            'C:\\Users\\hakatashi\\AppData\\Roaming\\Python\\Scripts\\poetry.exe',
+            'run',
+            'python',
+            '-u',
+            'worker.py',
+            mode,
+            'Llama',
         ],
         stdout=stdout_stream,
         stderr=stderr_stream,
