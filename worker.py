@@ -335,7 +335,7 @@ def pubsub_callback(message) -> None:
                     else:
                         logger.info('random.choice')
                         character = random.choice(
-                            ['りんな', 'うな', 'うか', 'うの', 'たたも'])
+                            ['りんな', 'うな', 'うか', 'うの'])
                         logger.info(f'character = {character}')
                     rinna_response(data['humanMessages'],
                                    character, thread_ts=thread_ts)
@@ -343,7 +343,6 @@ def pubsub_callback(message) -> None:
             message.ack()
 
         except Exception as e:
-            traceback.logger.info_exc()
             logger.info(e)
 
         finally:
@@ -357,7 +356,6 @@ def pubsub_callback(message) -> None:
             message.ack()
 
         except Exception as e:
-            traceback.logger.info_exc()
             logger.info(e)
 
         finally:
@@ -404,7 +402,6 @@ def pubsub_callback(message) -> None:
             message.ack()
 
         except Exception as e:
-            traceback.logger.info_exc()
             logger.info(e)
 
         finally:
