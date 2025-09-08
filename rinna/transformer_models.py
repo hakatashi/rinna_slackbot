@@ -6,8 +6,14 @@ from time import time
 import os
 from gstop import GenerationStopper
 from huggingface_hub import hf_hub_download
-from llama_cpp import Llama
 from logging import getLogger, INFO
+
+# https://qiita.com/koyayashi/items/2bb1bafc33249aa4d7f3
+for p in os.environ['PATH'].split(os.pathsep):
+    if os.path.isdir(p):
+        os.add_dll_directory(p)
+
+from llama_cpp import Llama
 
 logger = getLogger(__name__)
 logger.setLevel(INFO)
@@ -28,12 +34,10 @@ if is_llama_mode:
 
     # model_name = "mmnga/japanese-stablelm-base-gamma-7b-gguf"
     # model_file = "japanese-stablelm-base-gamma-7b-q6_K.gguf"
-    model_name = "mradermacher/Qwen2.5-14B-GGUF"
-    # model_name = "Mungert/Qwen3-14B-GGUF"
-    # model_name = "bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF"
-    model_file = "Qwen2.5-14B.Q4_K_S.gguf"
-    # model_file = "Qwen3-14B-q4_k_l.gguf"
-    # model_file = "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"
+    # model_name = "mradermacher/Qwen2.5-14B-GGUF"
+    model_name = "mradermacher/Qwen3-14B-Base-GGUF"
+    # model_file = "Qwen2.5-14B.Q4_K_S.gguf"
+    model_file = "Qwen3-14B-Base.Q4_K_S.gguf"
     model_path = hf_hub_download(model_name, filename=model_file)
 
     model = Llama(
