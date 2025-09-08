@@ -28,8 +28,11 @@ tokenizers = "^0.22.0"
 pytest-mock = "^3.14.1"
 torch = {version = "^2.6.0", source = "torch_cu124"}
 gstop = "^0.2.3"
-llama-cpp-python = {version = "0.3.4", source = "llama_cpp_cu124"}
 accelerate = "^1.10.1"
+
+# $env:CMAKE_ARGS='-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_ROOT="C:\Users\hakatashi\AppData\Local\OpenBLAS-0.3.30-x64" -DBLAS_INCLUDE_DIRS="C:\Users\hakatashi\AppData\Local\OpenBLAS-0.3.30-x64\include"'
+# $env:PATH += ";C:\Users\hakatashi\AppData\Local\OpenBLAS-0.3.30-x64\bin"
+llama-cpp-python = "^0.3.16"
 
 
 [[tool.poetry.source]]

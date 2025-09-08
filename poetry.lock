@@ -1666,20 +1666,13 @@ tests = ["matplotlib (>=3.5.0)", "packaging (>=20.0)", "pytest", "pytest-cov", "
 
 [[package]]
 name = "llama-cpp-python"
-version = "0.3.4"
+version = "0.3.16"
 description = "Python bindings for the llama.cpp library"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "llama_cpp_python-0.3.4-cp310-cp310-linux_x86_64.whl", hash = "sha256:2f7afb29df9067f6afbb90b71341f6b9aaf8f6c81e4787fbbb76b5aa3850b3dd"},
-    {file = "llama_cpp_python-0.3.4-cp310-cp310-win_amd64.whl", hash = "sha256:54484e4a5032a949b68f7b4361ec35f8b3091d995c255892c63afc0d57c35503"},
-    {file = "llama_cpp_python-0.3.4-cp311-cp311-linux_x86_64.whl", hash = "sha256:ac4023899cace58debdd4f6e0c9d11065b02ec4743521d6838602fbd67a1041e"},
-    {file = "llama_cpp_python-0.3.4-cp311-cp311-win_amd64.whl", hash = "sha256:b12e3eb60d40aec3b178d8c7d4b3568294ad4e6d55c19ed0608b778e947a2a3b"},
-    {file = "llama_cpp_python-0.3.4-cp312-cp312-linux_x86_64.whl", hash = "sha256:c3e1cab50aca2194d55c4164c2d01304919f0533e9a9aedb1390c2bfd95dd6d0"},
-    {file = "llama_cpp_python-0.3.4-cp312-cp312-win_amd64.whl", hash = "sha256:f07bef42e7b1ebeaa7f54ad9550225d167fbdf81fe670345293c393c7172eb7c"},
-    {file = "llama_cpp_python-0.3.4-cp39-cp39-linux_x86_64.whl", hash = "sha256:f17dcf583c348b7dc305072c24536545c426e9e9cc325d0733be5fe578c753e8"},
-    {file = "llama_cpp_python-0.3.4-cp39-cp39-win_amd64.whl", hash = "sha256:a8c10de72ae6a270db3386091e1fad0f459c8ea964fc81aba1a922c6142496ce"},
+    {file = "llama_cpp_python-0.3.16.tar.gz", hash = "sha256:34ed0f9bd9431af045bb63d9324ae620ad0536653740e9bb163a2e1fcb973be6"},
 ]
 
 [package.dependencies]
@@ -1693,11 +1686,6 @@ all = ["llama_cpp_python[dev,server,test]"]
 dev = ["black (>=23.3.0)", "httpx (>=0.24.1)", "mkdocs (>=1.4.3)", "mkdocs-material (>=9.1.18)", "mkdocstrings[python] (>=0.22.0)", "pytest (>=7.4.0)", "twine (>=4.0.2)"]
 server = ["PyYAML (>=5.1)", "fastapi (>=0.100.0)", "pydantic-settings (>=2.0.1)", "sse-starlette (>=1.6.1)", "starlette-context (>=0.3.6,<0.4)", "uvicorn (>=0.22.0)"]
 test = ["fastapi (>=0.100.0)", "httpx (>=0.24.1)", "huggingface-hub (>=0.23.0)", "pydantic-settings (>=2.0.1)", "pytest (>=7.4.0)", "scipy (>=1.10)", "sse-starlette (>=1.6.1)", "starlette-context (>=0.3.6,<0.4)"]
-
-[package.source]
-type = "legacy"
-url = "https://abetlen.github.io/llama-cpp-python/whl/cu124"
-reference = "llama_cpp_cu124"
 
 [[package]]
 name = "llvmlite"
@@ -4318,4 +4306,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "a290c347f97c9c34101fd2d7831d4542571698c1bcad86bc860dc59237f32536"
+content-hash = "76e8f0bc74712909c1d6bbdbe46e9497889534c071fce79105b05c7000a2376a"
