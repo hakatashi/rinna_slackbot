@@ -2,6 +2,7 @@ from pystray import Menu, MenuItem, Icon
 import subprocess
 from PIL import Image
 from logging import getLogger, INFO
+import sys
 
 logger = getLogger(__name__)
 logger.setLevel(INFO)
@@ -12,19 +13,29 @@ logger.info(f'mode = {mode}')
 stdout_stream = open('stdout.log', mode='ab')
 stderr_stream = open('stderr.log', mode='ab')
 
-worker_process = subprocess.Popen(
-    [
-        'C:\\Users\\hakatashi\\AppData\\Roaming\\Python\\Scripts\\poetry.exe',
+def start_worker_process(mode: str) -> subprocess.Popen:
+    """
+    Starts the worker.py subprocess with the given mode.
+    """
+    command = [
+        'poetry',
         'run',
         'python',
         '-u',
         'worker.py',
         mode,
         'Llama',
-    ],
-    stdout=stdout_stream,
-    stderr=stderr_stream
-)
+    ]
+    logger.info(f"Starting worker process with command: {' '.join(command)}")
+    return subprocess.Popen(
+        command,
+        stdout=stdout_stream,
+        stderr=stderr_stream,
+        encoding="utf8",
+        universal_newlines=True
+    )
+
+worker_process = start_worker_process(mode)
 
 icon = Icon(
     'りんな',
@@ -49,22 +60,8 @@ def mode_switch_action(new_mode):
 
     exit_worker()
     mode = new_mode
+    worker_process = start_worker_process(mode)
 
-    worker_process = subprocess.Popen(
-        [
-            'C:\\Users\\hakatashi\\AppData\\Roaming\\Python\\Scripts\\poetry.exe',
-            'run',
-            'python',
-            '-u',
-            'worker.py',
-            mode,
-            'Llama',
-        ],
-        stdout=stdout_stream,
-        stderr=stderr_stream,
-        encoding="utf8",
-        universal_newlines=True
-    )
     if new_mode == "CPU":
         icon.menu = Menu(switch_to_gpu_item, exit_item)
     elif new_mode == "GPU":
