@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+BOT_ID = 'BEHP604TV'
+
 try:
     with open(Path(__file__).parent.parent / 'data' / 'users.json', 'r', encoding='utf-8') as f:
         username_mapping = json.load(f)

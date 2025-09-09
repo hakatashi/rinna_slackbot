@@ -21,10 +21,9 @@ from msrest.authentication import CognitiveServicesCredentials
 from time import time, sleep
 from rinna.utils import has_offensive_term
 from rinna.generation import generate_rinna_response, generate_rinna_meaning
-from rinna.configs import character_configs
-# from rinna.llm_benchmark import score_response, update_form_scores
+from rinna.configs import character_configs, BOT_ID
 from concurrent.futures import ThreadPoolExecutor
-import string
+import uuid
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -33,21 +32,35 @@ logger.info('Worker started')
 
 load_dotenv()
 
+# --- Environment Variables ---
+SLACK_TOKEN = os.environ['SLACK_TOKEN']
+CONTENT_MODERATOR_ENDPOINT = os.environ['CONTENT_MODERATOR_ENDPOINT']
+CONTENT_MODERATOR_SUBSCRIPTION_KEY = os.environ['CONTENT_MODERATOR_SUBSCRIPTION_KEY']
+GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "hakatabot-firebase-functions")
+PUBSUB_SUBSCRIPTION_ID = os.environ.get("PUBSUB_SUBSCRIPTION_ID", "rinna-signal")
+SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID", "C7AAX50QY")
+
 mutex = Lock()
 
-slack_client = WebClient(token=os.environ['SLACK_TOKEN'])
+# --- Client Initialization ---
+slack_client = WebClient(token=SLACK_TOKEN)
 language_client = language_v1.LanguageServiceClient()
 content_moderator_client = ContentModeratorClient(
-    endpoint=os.environ['CONTENT_MODERATOR_ENDPOINT'],
-    credentials=CognitiveServicesCredentials(
-        os.environ['CONTENT_MODERATOR_SUBSCRIPTION_KEY'])
+    endpoint=CONTENT_MODERATOR_ENDPOINT,
+    credentials=CognitiveServicesCredentials(CONTENT_MODERATOR_SUBSCRIPTION_KEY)
 )
-
 app = firebase_admin.initialize_app()
 db = firestore.client()
-
 responses_ref = db.collection(u'rinna-responses')
 
+# --- Character Definitions ---
+CHARACTER_TRIGGERS = [
+    {'name': 'りんな', 'triggers': ['りんな'], 'username': 'りんな'},
+    {'name': 'うな', 'triggers': ['うな'], 'username': '今言うな'},
+    {'name': 'うか', 'triggers': ['うか'], 'username': '皿洗うか'},
+    {'name': 'うの', 'triggers': ['うの'], 'username': '皿洗うの'},
+    {'name': 'たたも', 'triggers': ['たたも'], 'username': '三脚たたも'},
+]
 
 def moderate_message(message):
     document = language_v1.Document(
@@ -128,25 +141,18 @@ def rinna_response(messages, character, dry_run=False, thread_ts=None):
             logger.info(f'Output: {rinna_message}')
             continue
 
-        if thread_ts is None:
-            thread_options = {}
-        else:
-            thread_options = {
-                'thread_ts': thread_ts,
-                'reply_broadcast': True,
-            }
+        thread_options = {'thread_ts': thread_ts, 'reply_broadcast': True} if thread_ts else {}
 
         logger.info(f'thread_options = {thread_options}')
         api_response = slack_client.chat_postMessage(
             text=rinna_message,
-            channel='C7AAX50QY',
+            channel=SLACK_CHANNEL_ID,
             icon_url=character_config['slack_user_icon'],
             username=character_config['slack_user_name'],
             **thread_options,
         )
 
-        response_id = ''.join(random.choice(
-            string.ascii_letters + string.digits) for _ in range(20))
+        response_id = str(uuid.uuid4())
 
         responses_ref.document(response_id).set({
             'createdAt': datetime.now(),
@@ -198,7 +204,7 @@ def rinna_meaning(word, ts=None, character='うな', dry_run=False):
 
         post_message_kwargs = {
             'text': rinna_message,
-            'channel': 'C7AAX50QY',
+            'channel': SLACK_CHANNEL_ID,
             'icon_url': character_config['slack_user_icon'],
             'username': f'おじさんが役に立たないときに助けてくれる{slack_username}',
         }
@@ -209,8 +215,7 @@ def rinna_meaning(word, ts=None, character='うな', dry_run=False):
 
         api_response = slack_client.chat_postMessage(**post_message_kwargs)
 
-        response_id = ''.join(random.choice(
-            string.ascii_letters + string.digits) for _ in range(20))
+        response_id = str(uuid.uuid4())
 
         responses_ref.document(response_id).set({
             'createdAt': datetime.now(),
@@ -226,186 +231,103 @@ def rinna_meaning(word, ts=None, character='うな', dry_run=False):
             'moderations': moderations,
         })
 
-
-'''
-for word in ['拙斎詩鈔', '太平洋諸島フォーラム', '備後の山中', '十把', 'クラスター', '死亡時画像診断', '耐えうる', '厄払いの図柄', 'アバイ', '自然エネルギー', 'RPS法', '徘徊したがる']:
-    rinna_meaning(word, None, 'うな', True)
-
-for i in range(10):
-    logger.info(rinna_response([
-        {
-            'user': 'U04G7TL4P',
-            'text': 'たたもって何歳なんだろう',
-        },
-    ], 'たたも', True))
-
-sys.exit()
-'''
-
-project_id = "hakatabot-firebase-functions"
-subscription_id = "rinna-signal"
-
 subscriber = pubsub_v1.SubscriberClient()
-subscription_path = subscriber.subscription_path(project_id, subscription_id)
+subscription_path = subscriber.subscription_path(GCP_PROJECT_ID, PUBSUB_SUBSCRIPTION_ID)
 
 publisher = pubsub_v1.PublisherClient()
-processed_submission_ids = set()
 
 
 def pubsub_callback(message) -> None:
-    data_buf = message.data
-    data = json.loads(data_buf.decode())
-    logger.info(
-        f'received rinna-signal: {data.get("type")} (lastSignal = {data.get("lastSignal")})')
+    try:
+        data = json.loads(message.data.decode())
+        logger.info(f'Received pub/sub message of type: {data.get("type")}')
 
-    if 'humanMessages' in data and data['type'] == 'rinna-signal' and isinstance(data['humanMessages'], list):
-        mutex.acquire()
+        message_type = data.get("type")
 
-        trigger_text = data['humanMessages'][-1]['text']
-        trigger_ts_str = data['humanMessages'][-1]['ts']
-        trigger_ts = float(trigger_ts_str)
-        now_ts = time()
-        rinna_triggered = False
-        logger.info(f'now_ts = {now_ts}, trigger_ts = {trigger_ts}')
-        if now_ts - trigger_ts > 15 * 60:
-            thread_ts = trigger_ts_str
-        else:
-            thread_ts = None
-
-        try:
-            if '@うな先生' in trigger_text:
-                word = re.sub(r'^@うな先生', '', trigger_text)
-                word = word.strip()
-                response = rinna_meaning(word, None, 'うな')
-
-            else:
-                if 'りんな' in trigger_text:
-                    response = rinna_response(
-                        data['humanMessages'], 'りんな', thread_ts=thread_ts)
-                    data['humanMessages'].append({
-                        'bot_id': 'BEHP604TV',
-                        'username': 'りんな',
-                        'text': response,
-                    })
-                    rinna_triggered = True
-
-                if 'うな' in trigger_text:
-                    response = rinna_response(
-                        data['humanMessages'], 'うな', thread_ts=thread_ts)
-                    data['humanMessages'].append({
-                        'bot_id': 'BEHP604TV',
-                        'username': '今言うな',
-                        'text': response,
-                    })
-                    rinna_triggered = True
-
-                if 'うか' in trigger_text:
-                    response = rinna_response(
-                        data['humanMessages'], 'うか', thread_ts=thread_ts)
-                    data['humanMessages'].append({
-                        'bot_id': 'BEHP604TV',
-                        'username': '皿洗うか',
-                        'text': response,
-                    })
-                    rinna_triggered = True
-
-                if 'うの' in trigger_text:
-                    response = rinna_response(
-                        data['humanMessages'], 'うの', thread_ts=thread_ts)
-                    data['humanMessages'].append({
-                        'bot_id': 'BEHP604TV',
-                        'username': '皿洗うの',
-                        'text': response,
-                    })
-                    rinna_triggered = True
-
-                if 'たたも' in trigger_text:
-                    response = rinna_response(
-                        data['humanMessages'], 'たたも', thread_ts=thread_ts)
-                    data['humanMessages'].append({
-                        'bot_id': 'BEHP604TV',
-                        'username': '三脚たたも',
-                        'text': response,
-                    })
-                    rinna_triggered = True
-
-                if not rinna_triggered:
-                    if '皿洗' in trigger_text:
-                        character = random.choice(['うか', 'うの'])
-                    else:
-                        logger.info('random.choice')
-                        character = random.choice(
-                            ['りんな', 'うな', 'うか', 'うの'])
-                        logger.info(f'character = {character}')
-                    rinna_response(data['humanMessages'],
-                                   character, thread_ts=thread_ts)
-
-            message.ack()
-
-        except Exception as e:
-            logger.info(e)
-
-        finally:
-            mutex.release()
-
-    if data['type'] == 'rinna-meaning':
-        mutex.acquire()
-
-        try:
-            rinna_meaning(data.get('word'), data.get('ts'), 'うな')
-            message.ack()
-
-        except Exception as e:
-            logger.info(e)
-
-        finally:
-            mutex.release()
-
-    if data['type'] == 'rinna-ping':
-        topic_id = data['topicId']
-        ts = int(topic_id.split('-')[-1])
-        current_time = time() * 1000
-        if current_time - ts > 1000 * 20:
-            logger.info(f'Ignoring old ping: {topic_id}')
-        else:
-            topic_path = publisher.topic_path(project_id, topic_id)
-            publish_future = publisher.publish(topic_path, json.dumps({
-                'type': 'rinna-pong',
-                'mode': sys.argv[1],
-            }).encode())
-
-            logger.info(publish_future.result())
+        if message_type == 'rinna-signal':
+            handle_rinna_signal(data)
+        elif message_type == 'rinna-meaning':
+            handle_rinna_meaning(data)
+        elif message_type == 'rinna-ping':
+            handle_rinna_ping(data)
+        elif message_type == 'llm-benchmark-submission':
+            logger.info("llm-benchmark-submission type is currently not handled.")
 
         message.ack()
 
-    if data['type'] == 'llm-benchmark-submission':
-        mutex.acquire()
+    except Exception:
+        logger.exception("An error occurred processing Pub/Sub message:")
+        # Deciding not to nack the message to avoid potential infinite retry loops.
+        # Depending on the error, a different strategy might be better.
+        message.ack()
 
+
+def handle_rinna_signal(data):
+    with mutex:
         try:
-            logger.info('Processing llm-benchmark-submission...')
-            submission_data = data['data']
+            if not ('humanMessages' in data and isinstance(data['humanMessages'], list) and data['humanMessages']):
+                return
 
-            '''
-            if 'id' in submission_data and submission_data['id'] not in processed_submission_ids:
-                submission_id = submission_data['id']
-                logger.info(f'Processing submission {submission_id}')
+            last_message = data['humanMessages'][-1]
+            trigger_text = last_message['text']
+            trigger_ts_str = last_message['ts']
 
-                scores = score_response(submission_data)
-                logger.info(f'Scores: {scores}')
+            now_ts = time()
+            trigger_ts = float(trigger_ts_str)
+            thread_ts = trigger_ts_str if (now_ts - trigger_ts > 15 * 60) else None
 
-                result = update_form_scores(submission_id, scores)
-                print(result)
+            if '@うな先生' in trigger_text:
+                word = re.sub(r'^@うな先生', '', trigger_text).strip()
+                rinna_meaning(word, None, 'うな')
+                return
 
-                processed_submission_ids.add(submission_id)
-            '''
+            triggered_character = None
+            for char_info in CHARACTER_TRIGGERS:
+                for trigger in char_info['triggers']:
+                    if trigger in trigger_text:
+                        response = rinna_response(data['humanMessages'], char_info['name'], thread_ts=thread_ts)
+                        data['humanMessages'].append({
+                            'bot_id': BOT_ID,
+                            'username': char_info['username'],
+                            'text': response,
+                        })
+                        triggered_character = char_info['name']
+                        break
+                if triggered_character:
+                    break
 
-            message.ack()
+            if not triggered_character:
+                if '皿洗' in trigger_text:
+                    character = random.choice(['うか', 'うの'])
+                else:
+                    character = random.choice(['りんな', 'うな', 'うか', 'うの'])
+                rinna_response(data['humanMessages'], character, thread_ts=thread_ts)
 
-        except Exception as e:
-            logger.info(e)
+        except Exception:
+            logger.exception("Error in handle_rinna_signal:")
 
-        finally:
-            mutex.release()
+
+def handle_rinna_meaning(data):
+    with mutex:
+        try:
+            rinna_meaning(data.get('word'), data.get('ts'), 'うな')
+        except Exception:
+            logger.exception("Error in handle_rinna_meaning:")
+
+
+def handle_rinna_ping(data):
+    topic_id = data['topicId']
+    ts = int(topic_id.split('-')[-1])
+    current_time = time() * 1000
+    if current_time - ts > 1000 * 20:
+        logger.info(f'Ignoring old ping: {topic_id}')
+    else:
+        topic_path = publisher.topic_path(GCP_PROJECT_ID, topic_id)
+        publish_future = publisher.publish(topic_path, json.dumps({
+            'type': 'rinna-pong',
+            'mode': sys.argv[1],
+        }).encode())
+        logger.info(publish_future.result())
 
 
 streaming_pull_future = subscriber.subscribe(
@@ -413,7 +335,7 @@ streaming_pull_future = subscriber.subscribe(
 
 
 def cancel(signum, frame):
-    logger.info('Received signal', signum)
+    logger.info(f'Received signal {signum}')
     streaming_pull_future.cancel()
 
 
@@ -425,6 +347,6 @@ logger.info(f"Listening for messages on {subscription_path}..\n")
 with subscriber:
     try:
         streaming_pull_future.result()
-    except TimeoutError:
+    except (TimeoutError, KeyboardInterrupt):
         streaming_pull_future.cancel()
         streaming_pull_future.result()
