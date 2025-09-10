@@ -2656,6 +2656,23 @@ sftp = ["paramiko (>=2.7.0)"]
 xxhash = ["xxhash (>=1.4.3)"]
 
 [[package]]
+name = "pproxy"
+version = "2.7.9"
+description = "Proxy server that can tunnel among remote servers by regex rules."
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "pproxy-2.7.9-py3-none-any.whl", hash = "sha256:a073d02616a47c43e1d20a547918c307dbda598c6d53869b165025f3cfe58e80"},
+]
+
+[package.extras]
+accelerated = ["pycryptodome (>=3.7.2)", "uvloop (>=0.13.0)"]
+daemon = ["python-daemon (>=2.2.3)"]
+quic = ["aioquic (>=0.9.7)"]
+sshtunnel = ["asyncssh (>=2.5.0)"]
+
+[[package]]
 name = "propcache"
 version = "0.2.1"
 description = "Accelerated property cache"
@@ -3017,6 +3034,19 @@ files = [
 diagrams = ["jinja2", "railroad-diagrams"]
 
 [[package]]
+name = "pysocks"
+version = "1.7.1"
+description = "A Python SOCKS client module. See https://github.com/Anorov/PySocks for more information."
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+groups = ["main"]
+files = [
+    {file = "PySocks-1.7.1-py27-none-any.whl", hash = "sha256:08e69f092cc6dbe92a0fdd16eeb9b9ffbc13cadfe5ca4c7bd92ffb078b293299"},
+    {file = "PySocks-1.7.1-py3-none-any.whl", hash = "sha256:2725bd0a9925919b9b51739eea5f9e2bae91e83288108a9ad338b2e3a4435ee5"},
+    {file = "PySocks-1.7.1.tar.gz", hash = "sha256:3f8804571ebe159c380ac6de37643bb4685970655d3bba243530d6558b799aa0"},
+]
+
+[[package]]
 name = "pystray"
 version = "0.19.5"
 description = "Provides systray integration"
@@ -3309,6 +3339,7 @@ files = [
 certifi = ">=2017.4.17"
 charset_normalizer = ">=2,<4"
 idna = ">=2.5,<4"
+PySocks = {version = ">=1.5.6,<1.5.7 || >1.5.7", optional = true, markers = "extra == \"socks\""}
 urllib3 = ">=1.21.1,<3"
 
 [package.extras]
@@ -4306,4 +4337,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "76e8f0bc74712909c1d6bbdbe46e9497889534c071fce79105b05c7000a2376a"
+content-hash = "d23b074467b9d769eea76930f68a553f3961fc610749ab7455b8edf17df6ba99"

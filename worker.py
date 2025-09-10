@@ -25,9 +25,16 @@ from rinna.configs import character_configs
 # from rinna.llm_benchmark import score_response, update_form_scores
 from concurrent.futures import ThreadPoolExecutor
 import string
-from logging import getLogger
+import asyncio
+from logging import getLogger, basicConfig, INFO
+from proxy_server import RinnaProxyServer
 
 logger = getLogger(__name__)
+# Configure logging
+basicConfig(
+    level=INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 logger.info('Worker started')
 
@@ -47,6 +54,17 @@ app = firebase_admin.initialize_app()
 db = firestore.client()
 
 responses_ref = db.collection(u'rinna-responses')
+
+# Initialize proxy server
+proxy_server = None
+proxy_thread = None
+proxy_enabled = os.environ.get('ENABLE_PROXY', 'false').lower() == 'true'
+proxy_port = int(os.environ.get('PROXY_PORT', '1080'))
+proxy_host = os.environ.get('PROXY_HOST', '127.0.0.1')
+
+if proxy_enabled:
+    proxy_server = RinnaProxyServer(host=proxy_host, port=proxy_port)
+    logger.info(f"Proxy server configured: {proxy_server.get_proxy_url()}")
 
 
 def moderate_message(message):
@@ -412,9 +430,77 @@ streaming_pull_future = subscriber.subscribe(
     subscription_path, callback=pubsub_callback)
 
 
+proxy_loop = None
+proxy_shutdown_event = None
+
+async def run_proxy_server():
+    """Run the proxy server in the background."""
+    global proxy_loop, proxy_shutdown_event
+    if proxy_server:
+        try:
+            handler = await proxy_server.start()
+            logger.info("Proxy server started successfully")
+            
+            # Wait for shutdown signal
+            while not proxy_shutdown_event.is_set():
+                await asyncio.sleep(0.1)
+                
+            # Clean shutdown
+            await proxy_server.stop()
+            logger.info("Proxy server stopped gracefully")
+            
+        except asyncio.CancelledError:
+            logger.info("Proxy server cancelled")
+            if proxy_server:
+                await proxy_server.stop()
+        except Exception as e:
+            logger.error(f"Proxy server failed: {e}")
+
+
+def start_proxy_server_background():
+    """Start proxy server in a separate thread."""
+    global proxy_thread, proxy_loop, proxy_shutdown_event
+    if proxy_server:
+        import threading
+        proxy_shutdown_event = threading.Event()
+        
+        def run_proxy():
+            global proxy_loop
+            proxy_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(proxy_loop)
+            try:
+                proxy_loop.run_until_complete(run_proxy_server())
+            except Exception as e:
+                logger.error(f"Proxy server thread error: {e}")
+            finally:
+                # Clean up any remaining tasks
+                pending_tasks = asyncio.all_tasks(proxy_loop)
+                if pending_tasks:
+                    logger.info(f"Cancelling {len(pending_tasks)} pending proxy tasks")
+                    for task in pending_tasks:
+                        task.cancel()
+                    proxy_loop.run_until_complete(asyncio.gather(*pending_tasks, return_exceptions=True))
+                proxy_loop.close()
+        
+        proxy_thread = threading.Thread(target=run_proxy, daemon=True)
+        proxy_thread.start()
+        logger.info("Proxy server started in background thread")
+
+
+def stop_proxy_server():
+    """Stop the proxy server gracefully."""
+    global proxy_shutdown_event, proxy_thread, proxy_loop
+    if proxy_shutdown_event:
+        logger.info("Stopping proxy server...")
+        proxy_shutdown_event.set()
+        if proxy_thread and proxy_thread.is_alive():
+            proxy_thread.join(timeout=5)  # Wait up to 5 seconds for graceful shutdown
+
+
 def cancel(signum, frame):
     logger.info('Received signal', signum)
     streaming_pull_future.cancel()
+    stop_proxy_server()
 
 
 signal.signal(signal.SIGINT, cancel)
@@ -422,9 +508,18 @@ signal.signal(signal.SIGTERM, cancel)
 
 logger.info(f"Listening for messages on {subscription_path}..\n")
 
+# Start proxy server if enabled
+start_proxy_server_background()
+
 with subscriber:
     try:
         streaming_pull_future.result()
     except TimeoutError:
         streaming_pull_future.cancel()
         streaming_pull_future.result()
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt")
+        stop_proxy_server()
+    finally:
+        # Ensure proxy server is stopped
+        stop_proxy_server()
