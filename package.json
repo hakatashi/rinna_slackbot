@@ -7,7 +7,7 @@
     "test-proxy": "node bin/test_proxy.js"
   },
   "dependencies": {
-    "axios": "^1.6.0",
+    "axios": "^1.12.0",
     "socks-proxy-agent": "^8.0.0"
   },
   "engines": {
