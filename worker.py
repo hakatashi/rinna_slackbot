@@ -1,5 +1,8 @@
 # coding=utf8
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from threading import Lock
 import random
 import traceback
@@ -7,7 +10,6 @@ from slack_sdk import WebClient
 import json
 import re
 import signal
-from dotenv import load_dotenv
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1, language_v1
 import firebase_admin
@@ -37,8 +39,6 @@ basicConfig(
 )
 
 logger.info('Worker started')
-
-load_dotenv()
 
 mutex = Lock()
 
