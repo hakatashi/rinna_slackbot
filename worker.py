@@ -27,6 +27,7 @@ from rinna.configs import character_configs
 # from rinna.llm_benchmark import score_response, update_form_scores
 from concurrent.futures import ThreadPoolExecutor
 import string
+import subprocess
 import asyncio
 from logging import getLogger, basicConfig, INFO
 from proxy_server import RinnaProxyServer
@@ -394,6 +395,28 @@ def pubsub_callback(message) -> None:
 
             logger.info(publish_future.result())
 
+        message.ack()
+
+    if data['type'] == 'rinna-temperature':
+        try:
+            result = subprocess.run(
+                ['rocm-smi', '--showtemp'],
+                capture_output=True, text=True, timeout=10,
+            )
+            match = re.search(r'Temperature \(Sensor edge\) \(C\): ([\d.]+)', result.stdout)
+            if match:
+                temp = match.group(1)
+                character_config = character_configs['うな']
+                slack_client.chat_postMessage(
+                    text=f'今のうなの体温は{temp}度だにゃ～！',
+                    channel='C7AAX50QY',
+                    icon_url=character_config['slack_user_icon'],
+                    username=character_config['slack_user_name'],
+                )
+            else:
+                logger.info(f'Failed to parse GPU temperature from rocm-smi output: {result.stdout}')
+        except Exception as e:
+            logger.info(e)
         message.ack()
 
     if data['type'] == 'llm-benchmark-submission':
