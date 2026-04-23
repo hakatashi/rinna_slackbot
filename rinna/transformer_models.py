@@ -66,7 +66,7 @@ if is_llama_mode:
         logger.info(
             f"Finished. Time taken: {end_time - start_time} seconds")
 
-        return output_text, {}
+        return output_text, {'model_provider': "Llama.cpp", 'model_name': model_name + '/' + model_file}
 
     def get_token_ids(text_input):
         token_ids = model.tokenize(text_input.encode("utf-8"))
@@ -136,6 +136,9 @@ else:
 
         logger.info(
             f"Finished. Time taken: {end_time - start_time} seconds")
+
+        config['model_provider'] = "Transformers"
+        config['model_name'] = "stabilityai/japanese-stablelm-2-base-1_6b"
 
         return output, config
 
