@@ -2,6 +2,7 @@ import re
 import regex
 
 MODERATION_ALLOWLIST = ['えた', 'クリ']
+SENTENCE_DELIMITERS = '!?！？♪｡。♡'
 
 def get_weekday_str(weekday):
     return '月火水木金土日'[weekday]
@@ -45,6 +46,18 @@ def normalize_speech_chunk(chunk):
         return re.sub(r'[。｡]$', '', chunk)
     return chunk
 
+def join_chunks_to_speech(chunks):
+    result = ''
+    for i, chunk in enumerate(chunks):
+        result += chunk
+        if i < len(chunks) - 1:
+            if not chunk or chunk[-1] not in SENTENCE_DELIMITERS:
+                result += '。'
+            else:
+                result += ' '
+        
+    return result
+
 def split_speech_to_chunks(speech):
     chunks = []
     current_chunk = ''
@@ -55,8 +68,8 @@ def split_speech_to_chunks(speech):
             is_inside_parentheses = True
         elif regex.match(r'\p{Pe}', c):
             is_inside_parentheses = False
-        elif c in '!?！？♪｡。' and not is_inside_parentheses:
-            if i + 1 < len(speech) and speech[i + 1] in '!?！？♪｡。':
+        elif c in SENTENCE_DELIMITERS and not is_inside_parentheses:
+            if i + 1 < len(speech) and speech[i + 1] in SENTENCE_DELIMITERS:
                 continue
             chunks.append(current_chunk)
             current_chunk = ''

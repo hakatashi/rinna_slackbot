@@ -21,8 +21,9 @@ from datetime import datetime
 from azure.cognitiveservices.vision.contentmoderator import ContentModeratorClient
 from msrest.authentication import CognitiveServicesCredentials
 from time import time, sleep
-from rinna.utils import has_offensive_term
-from rinna.generation import generate_rinna_response, generate_rinna_meaning
+from rinna.utils import has_offensive_term, join_chunks_to_speech
+from rinna.generation import generate_rinna_response, generate_rinna_meaning, generate_rinna_response_streaming
+import rinna.transformer_models as _transformer_models
 from rinna.configs import character_configs
 # from rinna.llm_benchmark import score_response, update_form_scores
 from concurrent.futures import ThreadPoolExecutor
@@ -124,10 +125,80 @@ def moderate_message(message):
     return is_adult or is_offensive, moderations
 
 
-def rinna_response(messages, character, dry_run=False, thread_ts=None):
+def _post_rinna_chunk(rinna_message, character, messages, info, thread_ts, dry_run):
+    """Moderates and posts a single speech chunk to Slack, then logs to Firestore."""
     character_config = character_configs[character]
+
+    is_censored, moderations = moderate_message(rinna_message)
+    if is_censored:
+        rinna_message = '##### CENSORED #####'
+
+    if dry_run:
+        logger.info(f'Output: {rinna_message}')
+        return None
+
+    if thread_ts is None:
+        thread_options = {}
+    else:
+        thread_options = {
+            'thread_ts': thread_ts,
+            'reply_broadcast': True,
+        }
+
+    logger.info(f'thread_options = {thread_options}')
+    api_response = slack_client.chat_postMessage(
+        text=rinna_message,
+        channel='C7AAX50QY',
+        icon_url=character_config['slack_user_icon'],
+        username=character_config['slack_user_name'],
+        **thread_options,
+    )
+
+    response_id = ''.join(random.choice(
+        string.ascii_letters + string.digits) for _ in range(20))
+
+    responses_ref.document(response_id).set({
+        'createdAt': datetime.now(),
+        'character': character,
+        'inputMessages': messages,
+        'inputText': info['text_input'],
+        'inputDialog': info['formatted_dialog'],
+        'inputTokenLength': info['input_len'],
+        'output': info['output'],
+        'outputSpeech': info['rinna_speech'],
+        'config': info['config'],
+        'message': api_response.data,
+        'moderations': moderations,
+        'thread_ts': thread_ts,
+    })
+
+    return api_response
+
+
+def rinna_response(messages, character, dry_run=False, thread_ts=None):
     logger.info(f'thread_ts = {thread_ts}')
 
+    if hasattr(_transformer_models, 'stream_text'):
+        # Streaming path: post each sentence to Slack as it's generated
+        all_chunks = []
+        first_chunk = True
+        for rinna_message, info in generate_rinna_response_streaming(messages, character):
+            if len(rinna_message) == 0:
+                continue
+
+            if rinna_message.endswith('。') and not re.match(r'。{2,}$', rinna_message):
+                rinna_message = re.sub(r'。$', '', rinna_message)
+
+            if not first_chunk:
+                sleep(1)
+            first_chunk = False
+
+            _post_rinna_chunk(rinna_message, character, messages, info, thread_ts, dry_run)
+            all_chunks.append(rinna_message)
+
+        return join_chunks_to_speech(all_chunks)
+
+    # Batch path for non-llama-server modes
     speech_chunks, info = generate_rinna_response(messages, character)
 
     for rinna_message in speech_chunks:
@@ -138,51 +209,9 @@ def rinna_response(messages, character, dry_run=False, thread_ts=None):
             rinna_message = re.sub(r'。$', '', rinna_message)
 
         sleep(1)
-        is_censored, moderations = moderate_message(rinna_message)
+        _post_rinna_chunk(rinna_message, character, messages, info, thread_ts, dry_run)
 
-        if is_censored:
-            rinna_message = '##### CENSORED #####'
-
-        if dry_run:
-            logger.info(f'Output: {rinna_message}')
-            continue
-
-        if thread_ts is None:
-            thread_options = {}
-        else:
-            thread_options = {
-                'thread_ts': thread_ts,
-                'reply_broadcast': True,
-            }
-
-        logger.info(f'thread_options = {thread_options}')
-        api_response = slack_client.chat_postMessage(
-            text=rinna_message,
-            channel='C7AAX50QY',
-            icon_url=character_config['slack_user_icon'],
-            username=character_config['slack_user_name'],
-            **thread_options,
-        )
-
-        response_id = ''.join(random.choice(
-            string.ascii_letters + string.digits) for _ in range(20))
-
-        responses_ref.document(response_id).set({
-            'createdAt': datetime.now(),
-            'character': character,
-            'inputMessages': messages,
-            'inputText': info['text_input'],
-            'inputDialog': info['formatted_dialog'],
-            'inputTokenLength': info['input_len'],
-            'output': info['output'],
-            'outputSpeech': info['rinna_speech'],
-            'config': info['config'],
-            'message': api_response.data,
-            'moderations': moderations,
-            'thread_ts': thread_ts,
-        })
-
-    return '。'.join(speech_chunks)
+    return join_chunks_to_speech(speech_chunks)
 
 
 def rinna_meaning(word, ts=None, character='うな', dry_run=False):

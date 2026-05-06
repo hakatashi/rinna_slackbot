@@ -1,11 +1,13 @@
 from multiprocessing import context
 import re
+import regex
 from datetime import datetime
 from typing import Any
-from rinna.utils import get_weekday_str, get_hour_str, normalize_text, split_speech_to_chunks
+from rinna.utils import get_weekday_str, get_hour_str, normalize_text, split_speech_to_chunks, normalize_speech_chunk, SENTENCE_DELIMITERS
 from rinna.configs import character_configs, username_mapping
 from rinna.transformer_models import generate_text, get_token_ids
-from typing import List, Dict, Tuple
+import rinna.transformer_models as _transformer_models
+from typing import List, Dict, Tuple, Generator
 from logging import getLogger, INFO
 from time import sleep
 
@@ -19,21 +21,78 @@ def format_message(message):
     return f"{message['user']}「{message['text']}」"
 
 
-def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> Tuple[List[str], Dict[str, Any]]:
+def _apply_rinna_replacements(text: str, character: str) -> str:
+    text = text.replace('[UNK]', '')
+    text = text.replace('『', '「')
+    text = text.replace('』', '」')
+    text = text.replace('ウナ', 'うな')
+    text = text.replace('ウカ', 'うか')
+    text = text.replace('ウノ', 'うの')
+    text = text.replace('タタモ', 'たたも')
+    if character == 'たたも':
+        text = text.replace('ワシ', '儂')
+    return text
+
+
+def _stream_speech_chunks(text_gen, character: str) -> Generator[str, None, None]:
+    """Takes a text-piece generator and yields processed speech chunks.
+
+    Detects sentence boundaries (。！？♪ etc.) the same way split_speech_to_chunks does,
+    but operates incrementally on the streaming output so chunks can be posted to Slack
+    as each sentence completes.
+    """
+    current_chunk = ''
+    is_inside_parens = False
+    pending_sentence_end = False
+
+    for piece in text_gen:
+        for char in piece:
+            if pending_sentence_end:
+                if char in SENTENCE_DELIMITERS:
+                    current_chunk += char
+                    continue
+                else:
+                    chunk = _apply_rinna_replacements(normalize_speech_chunk(current_chunk), character)
+                    if chunk:
+                        yield chunk
+                    current_chunk = char
+                    pending_sentence_end = False
+            else:
+                current_chunk += char
+
+            if regex.match(r'\p{Ps}', char):
+                is_inside_parens = True
+            elif regex.match(r'\p{Pe}', char):
+                is_inside_parens = False
+            elif char in SENTENCE_DELIMITERS and not is_inside_parens:
+                pending_sentence_end = True
+
+    if current_chunk:
+        chunk = _apply_rinna_replacements(normalize_speech_chunk(current_chunk), character)
+        if chunk:
+            yield chunk
+
+
+def _prepare_generation(messages: List[Dict[str, Any]], character: str):
+    """Shared setup: formats messages and tokenizes.
+
+    Returns (token_ids_output, text_input, formatted_dialog) or
+    (None, '', '') when the context is empty.
+    """
     character_config = character_configs[character]
     name_in_text = character_config['name_in_text']
 
     last_message_text = messages[-1]['text'] or ''
-    is_inquiry = last_message_text.endswith(
-        '？') or last_message_text.endswith('?')
+    is_inquiry = last_message_text.endswith('？') or last_message_text.endswith('?')
 
     logger.info(f'{is_inquiry = }')
 
     use_instruction_prompt = False
 
-    # sleep(5)
-
     token_ids_output: Any = None
+    formatted_dialog = ''
+    text_input = ''
+
     if is_inquiry and 'inquiry_intro' in character_config and not use_instruction_prompt:
         formatted_dialog = f'質問「{last_message_text}」'
         text_input = character_config['inquiry_intro'] + \
@@ -82,7 +141,7 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
 
             if len(formatted_messages) >= 1 and formatted_messages[-1]['user'] == user:
                 last_text: str = formatted_messages[-1]['text']
-                if re.search(r'[!?！？。｡、､]$', last_text) is not None:
+                if len(last_text) > 0 and last_text[-1] in SENTENCE_DELIMITERS:
                     formatted_messages[-1]['text'] = last_text + ' ' + text
                 else:
                     formatted_messages[-1]['text'] = last_text + '。' + text
@@ -130,6 +189,14 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
 
     if token_ids_output is None:
         logger.info('token_ids_output is empty. Quitting...')
+
+    return token_ids_output, text_input, formatted_dialog
+
+
+def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> Tuple[List[str], Dict[str, Any]]:
+    token_ids_output, text_input, formatted_dialog = _prepare_generation(messages, character)
+
+    if token_ids_output is None:
         return '', {}
 
     input_len = len(token_ids_output[0])
@@ -140,15 +207,7 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
         return '', {}
 
     rinna_speech = output.split('」')[0]
-    rinna_speech = rinna_speech.replace('[UNK]', '')
-    rinna_speech = rinna_speech.replace('『', '「')
-    rinna_speech = rinna_speech.replace('』', '」')
-    rinna_speech = rinna_speech.replace('ウナ', 'うな')
-    rinna_speech = rinna_speech.replace('ウカ', 'うか')
-    rinna_speech = rinna_speech.replace('ウノ', 'うの')
-    rinna_speech = rinna_speech.replace('タタモ', 'たたも')
-    if character == 'たたも':
-        rinna_speech = rinna_speech.replace('ワシ', '儂')
+    rinna_speech = _apply_rinna_replacements(rinna_speech, character)
 
     speech_chunks = split_speech_to_chunks(rinna_speech)
 
@@ -163,6 +222,45 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
     }
 
     return speech_chunks, info
+
+
+def generate_rinna_response_streaming(messages: List[Dict[str, Any]], character: str) -> Generator[Tuple[str, Dict[str, Any]], None, None]:
+    """Generator that yields (chunk, info) tuples from llama-server streaming.
+
+    Each yielded chunk is a complete sentence ready to post to Slack.
+    The info dict is mutable and accumulates the full output across yields.
+    """
+    token_ids_output, text_input, formatted_dialog = _prepare_generation(messages, character)
+
+    if token_ids_output is None:
+        return
+
+    input_len = len(token_ids_output[0])
+    config = {
+        'model_provider': 'llama-server',
+        'model_name': _transformer_models.model_name + '/' + _transformer_models.model_file,
+    }
+
+    info: Dict[str, Any] = {
+        'text_input': text_input,
+        'formatted_dialog': formatted_dialog,
+        'input_len': input_len,
+        'config': config,
+        'output': '',
+        'rinna_speech': '',
+        'speech_chunks': [],
+    }
+
+    for chunk in _stream_speech_chunks(_transformer_models.stream_text(token_ids_output), character):
+        if len(info['output']) > 0:
+            if info['output'][-1] not in SENTENCE_DELIMITERS:
+                info['output'] += '。'
+            else:
+                info['output'] += ' '
+        info['output'] += chunk
+        info['rinna_speech'] = info['output']
+        info['speech_chunks'].append(chunk)
+        yield chunk, info
 
 
 def generate_rinna_meaning(character: str, word: str) -> Tuple[List[str], Dict[str, Any]]:

@@ -42,6 +42,7 @@ if is_llama_server_mode:
     import subprocess
     import requests as _requests
     import atexit
+    import json as _json
     from pathlib import Path
 
     logger.info('Using llama-server mode')
@@ -113,6 +114,73 @@ if is_llama_server_mode:
         logger.info('llama-server stopped')
 
     atexit.register(_stop_server)
+
+    def stream_text(token_ids):
+        """Generator that yields text pieces from llama-server streaming API.
+
+        Tracks '「」' nesting depth and stops only when '」' appears at depth 0
+        (the closing bracket of the outermost speech), so nested quotes like
+        '「word」' inside the speech do not prematurely end generation.
+        """
+        logger.info('Streaming text via llama-server...')
+        start_time = time()
+
+        response = _requests.post(
+            f"{SERVER_URL}/completion",
+            json={
+                "prompt": token_ids[0],
+                "n_predict": 512,
+                "stream": True,
+                "seed": -1,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "top_k": 50,
+                "repeat_penalty": 1.4,
+            },
+            stream=True,
+            timeout=300,
+        )
+
+        if response.status_code != 200:
+            raise RuntimeError(f'llama-server /completion returned {response.status_code}: {response.text}')
+
+        bracket_depth = 0
+
+        for line in response.iter_lines():
+            if not line:
+                continue
+            if not line.startswith(b'data: '):
+                continue
+            data = _json.loads(line[6:])
+            piece = data.get('content', '')
+
+            stop_idx = None
+            for i, char in enumerate(piece):
+                if char == '「':
+                    bracket_depth += 1
+                elif char == '」':
+                    if bracket_depth == 0:
+                        stop_idx = i
+                        break
+                    bracket_depth -= 1
+
+            logger.info(f"stream_text: piece={piece!r} bracket_depth={bracket_depth} stop_idx={stop_idx} stop={data.get('stop', False)}")
+
+            if stop_idx is not None:
+                if stop_idx > 0:
+                    yield piece[:stop_idx]
+                end_time = time()
+                logger.info(f"Finished (end of speech). Time taken: {end_time - start_time:.1f}s")
+                return
+
+            if piece:
+                yield piece
+
+            if data.get('stop', False):
+                break
+
+        end_time = time()
+        logger.info(f"Finished. Time taken: {end_time - start_time:.1f}s")
 
     def generate_text(token_ids):
         logger.info('Generating text via llama-server...')
