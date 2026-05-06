@@ -20,13 +20,14 @@ google-cloud-pubsub = "^2.31.1"
 google-cloud-language = "^2.17.2"
 datasets = {extras = ["audio"], version = "^3.6.0"}
 evaluate = "^0.4.5"
-transformers = "^4.56.0"
+transformers = "^5.2.0"
 scikit-learn = "^1.7.1"
 psutil = "^7.0.0"
 pytest = "^8.4.2"
 tokenizers = "^0.22.0"
 pytest-mock = "^3.14.1"
-torch = {version = "^2.6.0", source = "torch_cu124"}
+torch = {version = "^2.6.0", source = "torch_rocm61"}
+pytorch-triton-rocm = {version = "^3.2.0", source = "torch_rocm61"}
 gstop = "^0.2.3"
 accelerate = "^1.10.1"
 pproxy = "^2.7.0"
@@ -34,17 +35,13 @@ requests = {extras = ["socks"], version = "^2.32.0"}
 
 # $env:CMAKE_ARGS='-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_ROOT="C:\Users\hakatashi\AppData\Local\OpenBLAS-0.3.30-x64" -DBLAS_INCLUDE_DIRS="C:\Users\hakatashi\AppData\Local\OpenBLAS-0.3.30-x64\include"'
 # $env:PATH += ";C:\Users\hakatashi\AppData\Local\OpenBLAS-0.3.30-x64\bin"
+# CMAKE_ARGS="-DGGML_HIP=on -DCMAKE_PREFIX_PATH=/opt/rocm-6.1.5 -DROCM_PATH=/opt/rocm-6.1.5" pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir --verbose
 llama-cpp-python = "^0.3.16"
 
 
 [[tool.poetry.source]]
-name = "torch_cu124"
-url = "https://download.pytorch.org/whl/cu124"
-priority = "explicit"
-
-[[tool.poetry.source]]
-name = "llama_cpp_cu124"
-url = "https://abetlen.github.io/llama-cpp-python/whl/cu124"
+name = "torch_rocm61"
+url = "https://download.pytorch.org/whl/rocm6.1"
 priority = "explicit"
 
 [build-system]

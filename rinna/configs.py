@@ -22,6 +22,12 @@ except FileNotFoundError:
         'tatamo_intro': 'たたもです',
     }
 
+try:
+    with open(Path(__file__).parent.parent / 'data' / 'una-instruct-prompt.txt', 'r', encoding='utf-8') as f:
+        una_instruction_prompt = f.read()
+except FileNotFoundError:
+    una_instruction_prompt = "うなの次の台詞を考えてください。"
+
 character_configs = {
     'りんな': {
         'intro': intro_mapping['rinna_intro'],
@@ -34,6 +40,7 @@ character_configs = {
         'intro': intro_mapping['una_intro'],
         'inquiry_intro': intro_mapping['una_inquiry_intro'],
         'meaning_intro': intro_mapping['una_meaning_intro'],
+        'instruction_prompt': una_instruction_prompt,
         'name_in_text': 'ウナ',
         'slack_user_name': '今言うな',
         'slack_user_icon': 'https://hakata-public.s3.ap-northeast-1.amazonaws.com/slackbot/una_icon.png',

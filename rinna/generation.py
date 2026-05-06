@@ -7,6 +7,7 @@ from rinna.configs import character_configs, username_mapping
 from rinna.transformer_models import generate_text, get_token_ids
 from typing import List, Dict, Tuple
 from logging import getLogger, INFO
+from time import sleep
 
 logger = getLogger(__name__)
 logger.setLevel(INFO)
@@ -28,8 +29,12 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
 
     logger.info(f'{is_inquiry = }')
 
+    use_instruction_prompt = False
+
+    # sleep(5)
+
     token_ids_output: Any = None
-    if is_inquiry and 'inquiry_intro' in character_config:
+    if is_inquiry and 'inquiry_intro' in character_config and not use_instruction_prompt:
         formatted_dialog = f'質問「{last_message_text}」'
         text_input = character_config['inquiry_intro'] + \
             '\n' + formatted_dialog + '\n' + '回答「'
@@ -99,8 +104,10 @@ def generate_rinna_response(messages: List[Dict[str, Any]], character: str) -> T
 
             formatted_dialog = '\n'.join(map(format_message, formatted_messages_bin))
 
-            text_input = character_config['intro'] + \
-                '\n\n' + formatted_dialog + f'\n{name_in_text}「'
+            intro = character_config['instruction_prompt'] + '\n' if use_instruction_prompt else character_config['intro'] + '\n'
+            outro = f'\n{name_in_text}「' if not use_instruction_prompt else '\n'
+
+            text_input = intro + '\n' + formatted_dialog + outro
 
             date = datetime.now()
 
