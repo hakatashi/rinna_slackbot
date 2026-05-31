@@ -22,7 +22,7 @@ from azure.cognitiveservices.vision.contentmoderator import ContentModeratorClie
 from msrest.authentication import CognitiveServicesCredentials
 from time import time, sleep
 from rinna.utils import has_offensive_term, join_chunks_to_speech
-from rinna.generation import generate_rinna_response, generate_rinna_meaning, generate_rinna_response_streaming
+from rinna.generation import generate_rinna_response, generate_rinna_meaning, generate_rinna_response_streaming, get_top2_human_usernames
 import rinna.transformer_models as _transformer_models
 from rinna.configs import character_configs
 # from rinna.llm_benchmark import score_response, update_form_scores
@@ -214,7 +214,7 @@ def rinna_response(messages, character, dry_run=False, thread_ts=None):
     return join_chunks_to_speech(speech_chunks)
 
 
-def rinna_meaning(word, ts=None, character='うな', dry_run=False):
+def rinna_meaning(word, ts=None, character='うな', dry_run=False, username1=None, username2=None):
     character_config = character_configs[character]
 
     if 'meaning_intro' not in character_config:
@@ -222,7 +222,7 @@ def rinna_meaning(word, ts=None, character='うな', dry_run=False):
 
     slack_username = character_config['slack_user_name']
 
-    speech_chunks, info = generate_rinna_meaning(character, word)
+    speech_chunks, info = generate_rinna_meaning(character, word, username1=username1, username2=username2)
 
     for i, rinna_message in enumerate(speech_chunks):
         if len(rinna_message) == 0:
@@ -320,17 +320,43 @@ def pubsub_callback(message) -> None:
         else:
             thread_ts = None
 
+        skip_clear = '/no_clear' in trigger_text
+
+        if skip_clear:
+            last_clear_index = -1
+        else:
+            last_clear_index = -1
+            for i, msg in enumerate(data['humanMessages']):
+                if msg.get('text') and '/clear' in msg['text']:
+                    last_clear_index = i
+
+        raw_messages = data['humanMessages'][last_clear_index:] if last_clear_index >= 0 else data['humanMessages']
+
+        messages = []
+        for msg in raw_messages:
+            if msg.get('text') is not None:
+                cleaned_text = re.sub(r'/no_clear|/clear', '', msg['text']).strip()
+                messages.append({**msg, 'text': cleaned_text})
+            else:
+                messages.append(msg)
+
+        trigger_text = re.sub(r'/no_clear|/clear', '', trigger_text).strip()
+
+        if last_clear_index >= 0:
+            logger.info(f'History cleared: keeping messages from index {last_clear_index} onwards')
+
         try:
             if '@うな先生' in trigger_text:
                 word = re.sub(r'^@うな先生', '', trigger_text)
                 word = word.strip()
-                response = rinna_meaning(word, None, 'うな')
+                u1, u2 = get_top2_human_usernames(messages)
+                response = rinna_meaning(word, None, 'うな', username1=u1, username2=u2)
 
             else:
                 if 'りんな' in trigger_text:
                     response = rinna_response(
-                        data['humanMessages'], 'りんな', thread_ts=thread_ts)
-                    data['humanMessages'].append({
+                        messages, 'りんな', thread_ts=thread_ts)
+                    messages.append({
                         'bot_id': 'BEHP604TV',
                         'username': 'りんな',
                         'text': response,
@@ -339,8 +365,8 @@ def pubsub_callback(message) -> None:
 
                 if 'うな' in trigger_text:
                     response = rinna_response(
-                        data['humanMessages'], 'うな', thread_ts=thread_ts)
-                    data['humanMessages'].append({
+                        messages, 'うな', thread_ts=thread_ts)
+                    messages.append({
                         'bot_id': 'BEHP604TV',
                         'username': '今言うな',
                         'text': response,
@@ -349,8 +375,8 @@ def pubsub_callback(message) -> None:
 
                 if 'うか' in trigger_text:
                     response = rinna_response(
-                        data['humanMessages'], 'うか', thread_ts=thread_ts)
-                    data['humanMessages'].append({
+                        messages, 'うか', thread_ts=thread_ts)
+                    messages.append({
                         'bot_id': 'BEHP604TV',
                         'username': '皿洗うか',
                         'text': response,
@@ -359,8 +385,8 @@ def pubsub_callback(message) -> None:
 
                 if 'うの' in trigger_text:
                     response = rinna_response(
-                        data['humanMessages'], 'うの', thread_ts=thread_ts)
-                    data['humanMessages'].append({
+                        messages, 'うの', thread_ts=thread_ts)
+                    messages.append({
                         'bot_id': 'BEHP604TV',
                         'username': '皿洗うの',
                         'text': response,
@@ -369,8 +395,8 @@ def pubsub_callback(message) -> None:
 
                 if 'たたも' in trigger_text:
                     response = rinna_response(
-                        data['humanMessages'], 'たたも', thread_ts=thread_ts)
-                    data['humanMessages'].append({
+                        messages, 'たたも', thread_ts=thread_ts)
+                    messages.append({
                         'bot_id': 'BEHP604TV',
                         'username': '三脚たたも',
                         'text': response,
@@ -385,8 +411,7 @@ def pubsub_callback(message) -> None:
                         character = random.choice(
                             ['りんな', 'うな', 'うか', 'うの'])
                         logger.info(f'character = {character}')
-                    rinna_response(data['humanMessages'],
-                                   character, thread_ts=thread_ts)
+                    rinna_response(messages, character, thread_ts=thread_ts)
 
             message.ack()
 

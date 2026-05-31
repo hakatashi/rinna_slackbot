@@ -2,12 +2,11 @@ from multiprocessing import context
 import re
 import regex
 from datetime import datetime
-from typing import Any
+from typing import Any, List, Dict, Tuple, Generator, Optional
 from rinna.utils import get_weekday_str, get_hour_str, normalize_text, split_speech_to_chunks, normalize_speech_chunk, SENTENCE_DELIMITERS
 from rinna.configs import character_configs, username_mapping
 from rinna.transformer_models import generate_text, get_token_ids
 import rinna.transformer_models as _transformer_models
-from typing import List, Dict, Tuple, Generator
 from logging import getLogger, INFO
 from time import sleep
 
@@ -19,6 +18,29 @@ def format_message(message):
     if message['user'] == 'context':
         return f"({message['text']})"
     return f"{message['user']}「{message['text']}」"
+
+
+def get_top2_human_usernames(messages: List[Dict]) -> tuple:
+    """直近2人の人間ユーザーの表示名を (user1, user2) で返す。1人しかいなければ同じ名前を使う。"""
+    seen = []
+    for message in reversed(messages):
+        if message.get('bot_id') is not None:
+            continue
+        user_id = message.get('user')
+        if user_id and user_id != 'context' and user_id not in seen:
+            seen.append(user_id)
+        if len(seen) >= 2:
+            break
+    names = [username_mapping.get(uid, uid) for uid in seen]
+    user1 = names[0] if len(names) >= 1 else None
+    user2 = names[1] if len(names) >= 2 else user1
+    return user1, user2
+
+
+def _replace_intro_placeholders(intro: str, user1: Optional[str], user2: Optional[str]) -> str:
+    intro = intro.replace('{user1}', user1 or '博多市')
+    intro = intro.replace('{user2}', user2 or 'ひでお')
+    return intro
 
 
 def _apply_rinna_replacements(text: str, character: str) -> str:
@@ -89,14 +111,16 @@ def _prepare_generation(messages: List[Dict[str, Any]], character: str):
 
     use_instruction_prompt = False
 
+    user1, user2 = get_top2_human_usernames(messages)
+
     token_ids_output: Any = None
     formatted_dialog = ''
     text_input = ''
 
     if is_inquiry and 'inquiry_intro' in character_config and not use_instruction_prompt:
+        inquiry_intro = _replace_intro_placeholders(character_config['inquiry_intro'], user1, user2)
         formatted_dialog = f'質問「{last_message_text}」'
-        text_input = character_config['inquiry_intro'] + \
-            '\n' + formatted_dialog + '\n' + '回答「'
+        text_input = inquiry_intro + '\n' + formatted_dialog + '\n' + '回答「'
         token_ids_output = get_token_ids(text_input)
     else:
         formatted_messages = []
@@ -158,12 +182,14 @@ def _prepare_generation(messages: List[Dict[str, Any]], character: str):
         text_input = ''
         formatted_dialog = ''
 
+        base_intro = _replace_intro_placeholders(character_config['intro'], user1, user2)
+
         for formatted_message in formatted_messages:
             formatted_messages_bin.insert(0, formatted_message)
 
             formatted_dialog = '\n'.join(map(format_message, formatted_messages_bin))
 
-            intro = character_config['instruction_prompt'] + '\n' if use_instruction_prompt else character_config['intro'] + '\n'
+            intro = character_config['instruction_prompt'] + '\n' if use_instruction_prompt else base_intro + '\n'
             outro = f'\n{name_in_text}「' if not use_instruction_prompt else '\n'
 
             text_input = intro + '\n' + formatted_dialog + outro
@@ -263,15 +289,16 @@ def generate_rinna_response_streaming(messages: List[Dict[str, Any]], character:
         yield chunk, info
 
 
-def generate_rinna_meaning(character: str, word: str) -> Tuple[List[str], Dict[str, Any]]:
+def generate_rinna_meaning(character: str, word: str, username1: Optional[str] = None, username2: Optional[str] = None) -> Tuple[List[str], Dict[str, Any]]:
     character_config = character_configs[character]
     character_name = character_config['name_in_text']
 
-    inquiry_message = f'ひでお「{character_name}、『{word}』ってわかる？」'
+    meaning_intro = _replace_intro_placeholders(character_config['meaning_intro'], username1, username2)
+    inquiry_name = username2 or 'ひでお'
+    inquiry_message = f'{inquiry_name}「{character_name}、『{word}』ってわかる？」'
     response_message = f'{character_name}「『{word}』っていうのは、'
 
-    text_input = character_config['meaning_intro'] + \
-        '\n' + inquiry_message + '\n' + response_message
+    text_input = meaning_intro + '\n' + inquiry_message + '\n' + response_message
 
     token_ids = get_token_ids(text_input)
 
