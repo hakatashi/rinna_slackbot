@@ -81,7 +81,7 @@ if is_llama_server_mode:
         start_new_session=True,
     )
 
-    def _wait_for_server(url, timeout=180):
+    def _wait_for_server(url, timeout=360):
         logger.info('Waiting for llama-server to start...')
         from time import sleep as _sleep
         _sleep(3)
