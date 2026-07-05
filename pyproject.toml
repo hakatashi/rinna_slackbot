@@ -44,6 +44,9 @@ name = "torch_rocm61"
 url = "https://download.pytorch.org/whl/rocm6.1"
 priority = "explicit"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
