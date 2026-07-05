@@ -23,7 +23,7 @@ evaluate = "^0.4.5"
 transformers = "^5.2.0"
 scikit-learn = "^1.7.1"
 psutil = "^7.0.0"
-pytest = "^8.4.2"
+pytest = ">=8.4.2,<10.0.0"
 tokenizers = "^0.22.0"
 pytest-mock = "^3.14.1"
 torch = {version = "^2.6.0", source = "torch_rocm61"}
