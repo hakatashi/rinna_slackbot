@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import {composeApp} from './composeRoot.js';
 import {loadEnv} from './config/env.js';
 
