@@ -1,0 +1,6 @@
+# Schema example for data/usernames.yaml (gitignored — this file only shows
+# the shape). Copy this to usernames.yaml and fill in real Slack user id ->
+# display name mappings.
+
+"U0000000001": "サンプル太郎"
+"U0000000002": "サンプル花子"

@@ -1,0 +1,42 @@
+# Schema example for data/personas.yaml (gitignored — this file only shows
+# the shape). Copy this to personas.yaml and fill in real character data.
+#
+# Each top-level key must be one of the five persona ids:
+#   りんな, うな, うか, うの, たたも
+# `intro` is required; `inquiryIntro` and `meaningIntro` are optional.
+# {user1}/{user2} and [MONTH]/[DATE]/[WEEKDAY]/[HOUR]/[MINUTE]/[WEATHER]
+# placeholders are substituted at generation time.
+
+りんな:
+  intro: |
+    ここに「りんな」の人物紹介・会話サンプルを書く。
+    {user1}「りんな、こんにちは」
+    りんな「こんにちは、{user1}」
+
+    [日付:[MONTH]月[DATE]日][曜日:[WEEKDAY]曜日][時刻:[HOUR]時[MINUTE]分][天気:[WEATHER]]
+  inquiryIntro: |
+    質問形式のサンプル対話をここに書く。
+    質問「りんなは何歳なの？」
+    回答「16歳だよ」
+
+うな:
+  intro: |
+    ここに「うな」の人物紹介・会話サンプルを書く。
+  inquiryIntro: |
+    質問形式のサンプル対話をここに書く。
+  meaningIntro: |
+    「@うな先生」向けの単語説明サンプル対話をここに書く。
+    {user2}「ウナ、『5ちゃんねる』ってわかる？」
+    ウナ「『5ちゃんねる』っていうのは、......」
+
+うか:
+  intro: |
+    ここに「うか」の人物紹介・会話サンプルを書く。
+
+うの:
+  intro: |
+    ここに「うの」の人物紹介・会話サンプルを書く。
+
+たたも:
+  intro: |
+    ここに「たたも」の人物紹介・会話サンプルを書く。

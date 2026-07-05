@@ -1,18 +1,40 @@
 {
-  "name": "rinna-slackbot-proxy-test",
-  "version": "1.0.0",
-  "description": "JavaScript SOCKS5 proxy testing for Rinna Slackbot",
-  "main": "bin/test_proxy.js",
-  "scripts": {
-    "test-proxy": "node bin/test_proxy.js"
-  },
-  "dependencies": {
-    "axios": "^1.16.0",
-    "socks-proxy-agent": "^8.0.0"
-  },
-  "engines": {
-    "node": ">=14.0.0"
-  },
-  "author": "Rinna Slackbot",
-  "license": "Apache-2.0"
+	"name": "rinna-slackbot",
+	"version": "0.1.0",
+	"description": "TSG Slackbot personas (りんな/うな/うか/うの/たたも) powered by llama-server",
+	"author": "Koki Takahashi <hakatasiloving@gmail.com>",
+	"license": "Apache-2.0",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=22"
+	},
+	"scripts": {
+		"start": "tsx src/main.ts",
+		"dev": "tsx watch src/main.ts",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"format": "biome format --write .",
+		"check:intro": "tsx scripts/checkIntroTokens.ts"
+	},
+	"dependencies": {
+		"@google-cloud/language": "^7.2.3",
+		"@google-cloud/pubsub": "^5.3.1",
+		"@huggingface/hub": "^2.13.2",
+		"@slack/web-api": "^7.18.0",
+		"async-mutex": "^0.5.0",
+		"firebase-admin": "^14.1.0",
+		"yaml": "^2.9.0",
+		"zod": "^4.4.3"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.2",
+		"@types/node": "^26.1.0",
+		"tsx": "^4.23.0",
+		"typescript": "7.0.1-rc",
+		"vitest": "^4.1.9"
+	}
 }
