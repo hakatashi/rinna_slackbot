@@ -13,6 +13,9 @@ from time import sleep
 logger = getLogger(__name__)
 logger.setLevel(INFO)
 
+MAX_PROMPT_TOKENS = 11500
+MAX_HISTORY_TOKENS = 2000
+
 
 def format_message(message):
     if message['user'] == 'context':
@@ -184,31 +187,40 @@ def _prepare_generation(messages: List[Dict[str, Any]], character: str):
 
         base_intro = _replace_intro_placeholders(character_config['intro'], user1, user2)
 
+        date = datetime.now()
+        intro = character_config['instruction_prompt'] + '\n' if use_instruction_prompt else base_intro + '\n'
+        outro = f'\n{name_in_text}「' if not use_instruction_prompt else '\n'
+
+        _base_text = intro + '\n' + outro
+        _base_text = _base_text.replace(r'[MONTH]', str(date.month))
+        _base_text = _base_text.replace(r'[DATE]', str(date.day))
+        _base_text = _base_text.replace(r'[WEEKDAY]', get_weekday_str(date.weekday()))
+        _base_text = _base_text.replace(r'[HOUR]', get_hour_str(date.hour))
+        _base_text = _base_text.replace(r'[MINUTE]', str(date.minute))
+        _base_text = _base_text.replace(r'[WEATHER]', 'くもり')
+        base_len = len(get_token_ids(_base_text)[0])
+        logger.info(f'{base_len = }')
+
         for formatted_message in formatted_messages:
             formatted_messages_bin.insert(0, formatted_message)
 
             formatted_dialog = '\n'.join(map(format_message, formatted_messages_bin))
 
-            intro = character_config['instruction_prompt'] + '\n' if use_instruction_prompt else base_intro + '\n'
-            outro = f'\n{name_in_text}「' if not use_instruction_prompt else '\n'
-
             text_input = intro + '\n' + formatted_dialog + outro
-
-            date = datetime.now()
 
             text_input = text_input.replace(r'[MONTH]', str(date.month))
             text_input = text_input.replace(r'[DATE]', str(date.day))
-            text_input = text_input.replace(
-                r'[WEEKDAY]', get_weekday_str(date.weekday()))
+            text_input = text_input.replace(r'[WEEKDAY]', get_weekday_str(date.weekday()))
             text_input = text_input.replace(r'[HOUR]', get_hour_str(date.hour))
             text_input = text_input.replace(r'[MINUTE]', str(date.minute))
             text_input = text_input.replace(r'[WEATHER]', 'くもり')
 
             token_ids = get_token_ids(text_input)
             input_len = len(token_ids[0])
-            logger.info(f'{input_len = }')
+            history_len = input_len - base_len
+            logger.info(f'{input_len = }, {history_len = }')
 
-            if input_len > 2900:
+            if input_len > MAX_PROMPT_TOKENS or history_len > MAX_HISTORY_TOKENS:
                 break
             else:
                 token_ids_output = token_ids

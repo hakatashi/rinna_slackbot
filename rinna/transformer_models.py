@@ -68,7 +68,7 @@ if is_llama_server_mode:
         "-m", model_path,
         "--host", SERVER_HOST,
         "--port", str(SERVER_PORT),
-        "-c", "8192",
+        "-c", "12288",
         "-ngl", "-1" if is_gpu_mode else "0",
     ]
 
