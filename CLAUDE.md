@@ -5,31 +5,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A Slack bot ("りんな" and friends — りんな/うな/うか/うの/たたも, five personas) that listens for
-messages on Google Cloud Pub/Sub, generates in-character dialogue with an LLM, moderates it, and
-posts it to Slack. The Pub/Sub messages are relayed from a separate Slack-event-listening service
-(not part of this repo); this repo only contains the "signal → generate → moderate → post" worker
-and its supporting model-serving code.
+messages on Google Cloud Pub/Sub, generates in-character dialogue with a locally-hosted LLM
+(via `llama-server`), moderates it, and posts it to Slack. The Pub/Sub messages are relayed from a
+separate Slack-event-listening service (`hakatabot-firebase-functions`, not part of this repo);
+this repo only contains the "signal → generate → moderate → post" worker.
+
+This is a TypeScript rewrite of a prior Python implementation. It is built as a hexagonal
+(ports & adapters) application: `domain/` holds pure, dependency-free logic; `ports/` declares the
+interfaces the app needs; `adapters/` implement those interfaces against real I/O; `app/` wires
+handlers to ports; `composeRoot.ts` and `main.ts` are the only places that construct concrete
+adapters and touch the outside world.
 
 ## Commands
 
-- Install deps: `poetry install`
-- Run tests: `poetry run pytest` (also runs in CI via `.github/workflows/test.yml` on Python 3.10)
-- Run a single test file/case: `poetry run pytest tests/rinna/test_generation.py::test_generate_rinna_response`
-- Run the worker directly: `poetry run python worker.py <CPU|GPU> <Llama|--llama-server|--llama>`
-  (see "Model backends" below for what the second argument controls)
-- Windows tray launcher (production deployment): `python app.py` — spawns `worker.py` as a
-  subprocess via a hardcoded Poetry path, restarts it on crash, and exposes a CPU/GPU toggle in
-  the system tray.
-- Regenerate `data/intro.json` / `data/users.json` after editing the Python source files: run
-  `data/intro.py` / `data/users.py` respectively (each writes its own JSON file as a side effect).
+- Install deps: `npm install`
+- Typecheck: `npm run typecheck`
+- Run tests: `npm test` (Vitest)
+- Lint / format: `npm run lint`, `npm run lint:fix`, `npm run format`
+- Run the worker: `npm start` (or `npm run dev` for `tsx watch`)
+- Check persona intro token lengths against the prompt budget: `npm run check:intro` (reads
+  `data/personas.yaml`; uses a running `llama-server`'s `/tokenize` if reachable at
+  `LLAMA_SERVER_HOST:LLAMA_SERVER_PORT`, otherwise falls back to a char-count estimate)
 
 ## System overview
 
 ```
 Slack → hakatabot-firebase-functions (Cloud Function)
-             ↓ Pub/Sub (rinna-signal / rinna-meaning / rinna-temperature)
-        worker.py (this repo)
-             ↓ LLM generation + moderation
+             ↓ Pub/Sub (rinna-signal / rinna-meaning / rinna-temperature / rinna-ping)
+        src/main.ts (this repo)
+             ↓ LLM generation (llama-server) + moderation
         Slack (post response) + Firestore (log rinna-responses)
              ↓
         hakatabot-firebase-functions (info command reads rinna-responses)
@@ -37,124 +41,101 @@ Slack → hakatabot-firebase-functions (Cloud Function)
 
 ### Signal emission (`hakatabot-firebase-functions/functions/src/slack.ts`)
 
-This repo does **not** contain the signal-emission code. That lives in the separate
-`hakatabot-firebase-functions` Cloud Functions project. The function `slackEvent` listens to the
-Slack Events API (HTTP webhook) and publishes to Pub/Sub topic `hakatabot`. Key behaviours:
+This repo does **not** contain the signal-emission code — see `src/contracts/README.md` for the
+full correspondence table and manual-sync procedure with that sibling repo. In short:
 
-**`rinna-signal`** — published when a new message arrives in the sandbox channel (`SANDBOX_ID`):
-- Maintains a sliding 15-minute window of `recentHumanMessages` and `recentBotMessages` in
-  Firestore state document `slack-rinna-signal`. Persona messages (りんな/うな/うか/うの/たたも)
-  posted by `TSG_SLACKBOT_ID` are treated as human messages so they count toward the conversation
-  history sent to the worker.
-- The signal fires under **two** conditions:
-  1. **Explicit mention** — the message matches `りんな、`, `@うな`, `皿洗うか` (full Slack
-     username), `@たたも`, etc. (any form that names one of the five personas). Fires immediately.
-  2. **Autonomous** — all of: ≥5 recent human messages, bot-message count ≤ half of human-message
-     count, ≥3 distinct human users, last signal was ≥60 min ago, and 30% random chance.
-- A block list prevents signals from being triggered during bot-hosted games and quizzes
-  (e.g., messages matching `ハイパーロボット`, `ソートなぞなぞ`, ending with `ロボット`/`占い`/`将棋`, etc.).
-- Users can opt out/in with `@りんな optout` / `@りんな optin`; opted-out users are excluded from
-  triggering and their messages are not forwarded.
-- The Pub/Sub payload is `{type: 'rinna-signal', botMessages, humanMessages, lastSignal}`.
-  `humanMessages` is the 15-minute window slice and is what `worker.py` receives as `data['humanMessages']`.
-
-**`rinna-meaning`** — published when TSG slackbot (`TSG_SLACKBOT_ID`) posts a message whose text
-ends with `わからん` (context-free bot explanation flow). Payload: `{type: 'rinna-meaning', word, ts}`.
-
-**`rinna-temperature`** — published when any message with text `うなの体温` is posted.
+- **`rinna-signal`** fires on an explicit persona mention or an autonomous heuristic (recent
+  activity, cooldown, random chance — all decided on the sibling repo's side). Payload:
+  `{type: 'rinna-signal', humanMessages, botMessages, lastSignal}`, where `humanMessages` is a
+  15-minute sliding window of Slack messages.
+- **`rinna-meaning`** fires when TSG slackbot posts a message ending in `わからん`. Payload:
+  `{type: 'rinna-meaning', word, ts}`.
+- **`rinna-temperature`** fires on any message with text `うなの体温`.
+- **`rinna-ping`** is a health-check round trip (not emitted by the sibling repo's `slack.ts`);
+  this worker replies with `{type: 'rinna-pong', mode}` published to the topic id embedded in the
+  ping payload.
 
 ### Firestore `rinna-responses` — the `info` command
 
-After the worker posts a response and logs it to the `rinna-responses` Firestore collection,
-the Cloud Function exposes an **info command**: replying to any persona message in a Slack thread
-with the single word `info` triggers a lookup of that message's `ts` in `rinna-responses` and
-posts a summary back into the thread, including:
-- The formatted input dialog that was fed to the LLM
-- The character name and full generated speech
-- Google Language Service moderation result (OK/NG + category list)
-- Azure Content Moderator result (OK/NG + matched terms)
-- `thinking_text` from the config, if present
+Every posted chunk is logged to the `rinna-responses` Firestore collection. The sibling repo's
+Cloud Function exposes an **info command**: replying `info` to a persona message in a Slack thread
+looks up that message's `ts` in `rinna-responses` and posts back the input dialog, generated
+speech, and moderation results.
 
 ## Architecture
 
 ### Entry points
 
-- `worker.py` — the main long-running process. Loads Slack/Firebase/Azure/Google credentials from
-  env, subscribes to Pub/Sub topic `rinna-signal` (project `hakatabot-firebase-functions`), and
-  dispatches on `data['type']`:
-  - `rinna-signal`: the core chat flow — pulls `humanMessages`, honors inline `/clear` and
-    `/no_clear` directives to trim history, detects a persona by substring match on the trigger
-    message (`りんな`/`うな`/`うか`/`うの`/`たたも`, falling back to a random persona), and calls
-    `rinna_response`/`rinna_meaning`.
-  - `rinna-meaning`, `rinna-ping` (pubsub round-trip health check), `rinna-temperature` (reports
-    GPU temp via `rocm-smi`), `llm-benchmark-submission` (mostly dead code, commented out).
-  - A global `mutex` serializes generation so only one response is produced at a time.
-- `app.py` — Windows-only system tray wrapper around `worker.py` for the production host machine.
-  Not used in CI/tests.
-- `proxy_server.py` — optional local SOCKS5 proxy (`pproxy`), started as a background thread from
-  `worker.py` when `ENABLE_PROXY=true`, used to route outbound model-download or API traffic.
+- `src/main.ts` — the only place with top-level side effects: loads env, calls `composeApp`,
+  subscribes to Pub/Sub, and wires `SIGINT`/`SIGTERM` to stop the `llama-server` subprocess
+  gracefully.
+- `src/composeRoot.ts` — the only place that constructs concrete adapters (Slack, Firestore,
+  Pub/Sub, Google/Azure moderation, llama-server process + client) and assembles the
+  `AppDependencies` bag used by handlers.
 
-### Generation pipeline (`rinna/`)
+### Domain (`src/domain/`) — pure, no I/O, heavily unit-tested
 
-- `rinna/configs.py` — `character_configs`: per-persona prompt intros (loaded from
-  `data/intro.json`, generated by `data/intro.py`), Slack display name/icon, etc. Also loads
-  `username_mapping` from `data/users.json` (Slack user ID → display name, generated by
-  `data/users.py`) and `una-instruct-prompt.txt`.
-- `rinna/generation.py` — turns a list of Slack-style messages into a prompt and back into speech:
-  - `_prepare_generation` formats the message history into the persona's "intro + dialogue so far"
-    prompt, substituting `[MONTH]`/`[DATE]`/`[WEEKDAY]`/`[HOUR]`/`[MINUTE]`/`[WEATHER]` and
-    `{user1}`/`{user2}` (resolved via `get_top2_human_usernames`), then grows the included history
-    one message at a time until the tokenized prompt would exceed ~2900 tokens.
-  - `generate_rinna_response` (batch) vs. `generate_rinna_response_streaming` (only available when
-    `rinna.transformer_models` exposes `stream_text`, i.e. llama-server mode) — the streaming path
-    yields one Slack message per detected sentence as tokens arrive, tracking `「」` nesting depth
-    itself (`_stream_speech_chunks`) so nested quotes don't prematurely end the persona's speech.
-  - `generate_rinna_meaning` — separate "ask うな先生 what a word means" flow, triggered by
-    `@うな先生` in the trigger message.
-  - Output text is split into `。！？♪｡♡`-delimited chunks (`split_speech_to_chunks` /
-    `normalize_speech_chunk` in `rinna/utils.py`) and posted to Slack as separate messages with a
-    1s delay between them, then optionally rejoined (`join_chunks_to_speech`) to log as one string.
-- `rinna/transformer_models.py` — selects one of three interchangeable text-generation backends at
-  import time based on `sys.argv`, each exposing the same `generate_text(token_ids)` /
-  `get_token_ids(text)` functions (llama-server mode also exposes `stream_text`):
-  - `--llama-server`: spawns a local `llama-server` binary (path hardcoded to
-    `~/Documents/GitHub/llama.cpp/build/bin/llama-server`) as a subprocess and talks to it over
-    HTTP (`/completion`, `/tokenize`). This is the streaming-capable path and the one used in
-    current production. Model weights are pulled via `hf_hub_download` at import time.
-  - `--llama`: in-process `llama_cpp.Llama` (GGUF), no subprocess.
-  - (no flag): `transformers` `AutoModelForCausalLM`, CPU or CUDA depending on `--gpu`.
-  - All three currently point at the same GGUF/HF model id
-    (`mradermacher/Qwen3.5-35B-A3B-Base-GGUF` / `Qwen/Qwen3.5-35B-A3B-Base`); swapping models means
-    editing all the relevant branches, since there's no shared config for the model id.
-- Moderation runs Google `language_v1.classify_text` (adult-content category) and Azure
-  `ContentModeratorClient.text_moderation.screen_text` **in parallel** via a `ThreadPoolExecutor`;
-  a message is censored (replaced with `##### CENSORED #####`) if either flags it. This happens
-  per Slack-chunk, after generation, right before posting — moderation results and full generation
-  metadata are logged to Firestore (`rinna-responses` collection) alongside the posted message.
+- `personas.ts` — the five persona ids and their static Slack display metadata.
+- `prompt/buildPrompt.ts` — builds the "intro + dialogue so far" prompt for a persona, growing the
+  included history one message at a time (newest-first) until the token budget
+  (`MAX_PROMPT_TOKENS=11500`, `MAX_HISTORY_TOKENS=2000`) would be exceeded, then keeping the last
+  window that fit. Takes an injected `tokenize` function so it never touches the network.
+- `speech/streamParser.ts` — consumes raw LLM text pieces and yields complete sentences as their
+  delimiter is confirmed (not mid-run of `！？`, not inside a bracket/quote).
+- `speech/splitChunks.ts` — the non-streaming counterpart, used by the `@うな先生` meaning flow.
+- `dispatch/detectPersonas.ts` — which personas a trigger message mentions (in fixed order,
+  possibly more than one), and the random fallback pool when none are mentioned (excludes たたも).
+- `dispatch/trimHistory.ts` — `/clear` and `/no_clear` handling.
+- `dispatch/moderationRules.ts` — the allowlist-aware offensive-term check.
+
+### Ports (`src/ports/`) and adapters (`src/adapters/`)
+
+`LlmClient`, `ChatPoster`, `Moderator`, `ResponseLog`, `MessageSource`/`Publisher`, `Thermometer`,
+`Clock`, `Random` are the interfaces `app/` handlers depend on. Concrete implementations:
+
+- `LlamaServerClient` + `llamaServerProcess.ts` — spawns and health-checks the `llama-server`
+  binary (path from `LLAMA_SERVER_BINARY`, default `~/Documents/GitHub/llama.cpp/build/bin/llama-server`),
+  then talks to it over HTTP. `streamGenerate` tracks `「`/`」` nesting depth itself to stop
+  generation exactly at the outer speech's closing bracket, without cutting off a quoted word
+  inside the speech.
+- `modelDownloader.ts` — pulls the GGUF from Hugging Face Hub via `@huggingface/hub`.
+- `SlackChatPoster`, `GoogleLanguageModerator`, `AzureContentModerator` (+ `ParallelModerator` to
+  run both concurrently), `FirestoreResponseLog`, `PubSubClient`, `RocmSmiThermometer`.
+
+### App (`src/app/`)
+
+- `handlers/signalHandler.ts` — the core chat flow: thread-reply logic for stale triggers,
+  `/clear`/`/no_clear`, then either the `@うな先生` meaning flow or firing each mentioned persona
+  in turn (each one's reply is appended to the running history before the next persona generates,
+  so multiple personas mentioned in one message "see" each other's replies).
+- `handlers/meaningHandler.ts` — the `@うな先生` / `rinna-meaning` flow. Always sleeps 1s before
+  posting every chunk, including the first (unlike the persona-response flow, which skips the
+  sleep before its first chunk).
+- `handlers/pingHandler.ts`, `handlers/temperatureHandler.ts`.
+- `router.ts` — dispatches on the parsed Pub/Sub payload's `type` (exhaustiveness-checked). Ack and
+  error-handling semantics intentionally differ per branch — see the comment in `router.ts`.
+- `mutex.ts` — serializes `rinna-signal`/`rinna-meaning` generation so only one LLM request runs
+  at a time.
+
+### Data (`data/`, gitignored)
+
+- `data/personas.yaml`, `data/usernames.yaml` — persona intros and Slack user id → display name
+  mapping. Not checked in; copy `data/personas.example.yaml` / `data/usernames.example.yaml` (which
+  *are* checked in, showing the schema) and fill in real content. Loaded and validated at startup
+  by `src/config/loadPersonaData.ts`.
 
 ### Tests
 
-- `tests/conftest.py` mocks out all heavy/native dependencies (`transformers`, `torch`, `gstop`,
-  `huggingface_hub`, `llama_cpp`, `dotenv`) at the `sys.modules` level before any test imports
-  happen, and sets `LLAMA_USE_GPU=0`, so `poetry run pytest` never touches real models or GPUs.
-  `tests/rinna/test_generation.py` additionally sets `os.environ["LLAMA_USE_GPU"] = "0"` at import
-  time (before importing `rinna.generation`) for the same reason.
-- Tests mock `rinna.generation.get_token_ids`/`generate_text` directly rather than going through
-  `rinna.transformer_models`, so they're independent of which backend branch would otherwise be
-  selected.
+Domain logic is tested with plain input/output assertions (no mocks). Adapters that talk HTTP are
+tested against an in-process fake server. App handlers are tested with fake ports
+(`tests/app/fakeDeps.ts`) — no real Slack/Firestore/Google/Azure credentials are ever needed to run
+`npm test`.
 
-### Data files
+## Explicitly out of scope for this rewrite
 
-- `data/intro.json`, `data/users.json` are generated artifacts — the source of truth is
-  `data/intro.py` / `data/users.py` (plain Python files with template strings / dicts that get
-  dumped to JSON via a top-level side effect on import/run). Edit the `.py` files, then re-run them
-  to regenerate the `.json`.
-- `data/una-instruct-prompt.txt` — instruction-style prompt for the `@うな先生` "explain a word"
-  flow, currently unused (`use_instruction_prompt` is hardcoded `False` in `rinna/generation.py`).
-
-### Misc / auxiliary scripts (`bin/`)
-
-One-off/manual scripts, not part of the worker's runtime: `train.py` (model experiments),
-`ask_rinna.py`, `stt.py` (Whisper transcription), `tts.py` (XTTS/TinyLlama experiments),
-`test_proxy.js`/`test_proxy.py` (manual SOCKS5 proxy smoke tests, run via `npm run test-proxy` or
-directly).
+- Non-`llama-server` model backends (in-process `llama.cpp`, `transformers`) — the old worker
+  supported three interchangeable backends; only the `llama-server` one is kept.
+- `llm-benchmark-submission` handling — was already mostly dead/commented-out code.
+- A local SOCKS5 proxy for outbound traffic.
+- The Windows tray launcher (CPU/GPU toggle, crash-restart supervision) — process supervision is
+  now expected to live in an external service manager; `LLAMA_GPU` is a plain env var.
