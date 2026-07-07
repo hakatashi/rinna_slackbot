@@ -24,7 +24,7 @@
 		"@google-cloud/language": "^7.2.3",
 		"@google-cloud/pubsub": "^5.3.1",
 		"@huggingface/hub": "^2.13.2",
-		"@slack/web-api": "^7.18.0",
+		"@slack/web-api": "^7.19.0",
 		"async-mutex": "^0.5.0",
 		"dotenv": "^17.4.2",
 		"firebase-admin": "^14.1.0",
