@@ -10,6 +10,7 @@ import {ParallelModerator} from './adapters/ParallelModerator.js';
 import {PubSubClient} from './adapters/PubSubClient.js';
 import {RocmSmiThermometer} from './adapters/RocmSmiThermometer.js';
 import {SlackChatPoster} from './adapters/SlackChatPoster.js';
+import {SlackImageDownloader} from './adapters/SlackImageDownloader.js';
 import type {AppDependencies} from './app/deps.js';
 import {createRouter} from './app/router.js';
 import type {Env} from './config/env.js';
@@ -41,10 +42,15 @@ export async function composeApp(env: Env): Promise<ComposedApp> {
 		{repo: env.MODEL_REPO, file: env.MODEL_FILE},
 		env.HUGGINGFACE_TOKEN,
 	);
+	const mmprojPath = await downloadModel(
+		{repo: env.MODEL_REPO, file: env.MMPROJ_FILE},
+		env.HUGGINGFACE_TOKEN,
+	);
 
 	const llamaServerProcess = new LlamaServerProcess({
 		binaryPath: env.LLAMA_SERVER_BINARY,
 		modelPath,
+		mmprojPath,
 		host: env.LLAMA_SERVER_HOST,
 		port: env.LLAMA_SERVER_PORT,
 		contextSize: env.LLAMA_CONTEXT_SIZE,
@@ -64,6 +70,7 @@ export async function composeApp(env: Env): Promise<ComposedApp> {
 	const firestore = getFirestore();
 
 	const chatPoster = new SlackChatPoster(env.SLACK_TOKEN);
+	const imageDownloader = new SlackImageDownloader(env.SLACK_TOKEN);
 	const moderator = new ParallelModerator(
 		new GoogleLanguageModerator(),
 		new AzureContentModerator({
@@ -81,6 +88,7 @@ export async function composeApp(env: Env): Promise<ComposedApp> {
 	const deps: AppDependencies = {
 		llm,
 		chatPoster,
+		imageDownloader,
 		moderator,
 		responseLog,
 		publisher: pubsub,
@@ -91,6 +99,7 @@ export async function composeApp(env: Env): Promise<ComposedApp> {
 		usernameMapping,
 		sandboxChannel: env.SANDBOX_CHANNEL_ID,
 		mode: env.LLAMA_GPU ? 'GPU' : 'CPU',
+		maxRecentImages: env.MAX_RECENT_IMAGES,
 	};
 
 	const route = createRouter(deps);

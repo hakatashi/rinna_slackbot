@@ -179,4 +179,102 @@ describe('signalHandler', () => {
 		await signalHandler(signal([]), deps);
 		expect(chatPoster.posts).toHaveLength(0);
 	});
+
+	it('downloads an attached image and generates with promptText+images', async () => {
+		const {llm, imageDownloader, deps} = createFakeDeps(NOW);
+		llm.streamPieces = ['はーい。'];
+
+		const promise = signalHandler(
+			signal([
+				{
+					text: 'りんな、これ見て',
+					user: 'U1',
+					ts: String(NOW.getTime() / 1000),
+					files: [
+						{url_private: 'https://slack/img.png', mimetype: 'image/png'},
+					],
+				},
+			]),
+			deps,
+		);
+		await vi.runAllTimersAsync();
+		await promise;
+
+		expect(imageDownloader.downloadedUrls).toEqual(['https://slack/img.png']);
+		const input = llm.receivedInputs[0];
+		expect(input && 'promptText' in input).toBe(true);
+		if (input && 'promptText' in input) {
+			expect(input.images).toEqual(['base64(https://slack/img.png)']);
+			expect(input.promptText).toContain('<__media__>');
+		}
+	});
+
+	it('ignores non-image attachments', async () => {
+		const {llm, imageDownloader, deps} = createFakeDeps(NOW);
+		llm.streamPieces = ['はーい。'];
+
+		const promise = signalHandler(
+			signal([
+				{
+					text: 'りんな、これ見て',
+					user: 'U1',
+					ts: String(NOW.getTime() / 1000),
+					files: [
+						{url_private: 'https://slack/doc.pdf', mimetype: 'application/pdf'},
+					],
+				},
+			]),
+			deps,
+		);
+		await vi.runAllTimersAsync();
+		await promise;
+
+		expect(imageDownloader.downloadedUrls).toHaveLength(0);
+		const input = llm.receivedInputs[0];
+		expect(input && 'tokenIds' in input).toBe(true);
+	});
+
+	it('keeps only the 3 most recent images across the history window', async () => {
+		const {imageDownloader, llm, deps} = createFakeDeps(NOW);
+		llm.streamPieces = ['はーい。'];
+		const baseTs = NOW.getTime() / 1000;
+
+		const promise = signalHandler(
+			signal([
+				{
+					text: '1枚目',
+					user: 'U1',
+					ts: String(baseTs - 30),
+					files: [{url_private: 'https://slack/1.png', mimetype: 'image/png'}],
+				},
+				{
+					text: '2枚目',
+					user: 'U1',
+					ts: String(baseTs - 20),
+					files: [{url_private: 'https://slack/2.png', mimetype: 'image/png'}],
+				},
+				{
+					text: '3枚目',
+					user: 'U1',
+					ts: String(baseTs - 10),
+					files: [{url_private: 'https://slack/3.png', mimetype: 'image/png'}],
+				},
+				{
+					text: 'りんな、4枚目',
+					user: 'U1',
+					ts: String(baseTs),
+					files: [{url_private: 'https://slack/4.png', mimetype: 'image/png'}],
+				},
+			]),
+			deps,
+		);
+		await vi.runAllTimersAsync();
+		await promise;
+
+		expect(imageDownloader.downloadedUrls).toEqual([
+			'https://slack/2.png',
+			'https://slack/3.png',
+			'https://slack/4.png',
+		]);
+	});
 });

@@ -4,6 +4,7 @@ import {existsSync} from 'node:fs';
 export interface LlamaServerProcessOptions {
 	readonly binaryPath: string;
 	readonly modelPath: string;
+	readonly mmprojPath: string;
 	readonly host: string;
 	readonly port: number;
 	readonly contextSize: number;
@@ -39,6 +40,8 @@ export class LlamaServerProcess {
 			[
 				'-m',
 				this.options.modelPath,
+				'--mmproj',
+				this.options.mmprojPath,
 				'--host',
 				this.options.host,
 				'--port',
