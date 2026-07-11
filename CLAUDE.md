@@ -131,6 +131,34 @@ tested against an in-process fake server. App handlers are tested with fake port
 (`tests/app/fakeDeps.ts`) — no real Slack/Firestore/Google/Azure credentials are ever needed to run
 `npm test`.
 
+## Process supervision (external)
+
+Starting, stopping, and auto-restarting this worker is **not** handled inside this repo. It's
+managed by a separate sibling project, `HakataMatrix-app-controller-claude`
+(`~/Documents/GitHub/HakataMatrix-app-controller-claude`), which runs as its own systemd service
+(`hakatamatrix-app-controller`) on the HakataMatrix machine and exposes Discord slash commands
+(`/start`, `/stop`, `/status`, `/join`, `/leave`) to control which GPU-dependent app is currently
+running (the machine has a single AMD Radeon Instinct MI50 32GB GPU, so only one GPU app runs at
+a time).
+
+- This worker is registered there as `rinna-worker`, the **default resident app**: started with
+  `npm start` in this repo's directory (`cwd`), and auto-restarted (5s delay) if it exits — unless
+  auto-restart has been disabled via `/stop` or a cronjob app is currently occupying the GPU.
+- Shutdown is graceful: the controller sends `SIGINT` and waits up to 30s before falling back to
+  `SIGKILL`. This is why `src/main.ts` wires `SIGINT`/`SIGTERM` to stop the `llama-server`
+  subprocess cleanly (see Entry points below) — an external SIGINT is the normal way this worker
+  gets stopped, not just a dev-time Ctrl-C.
+- A daily cronjob app (`danbooru-ml-classifier-worker`, unrelated to this repo) runs at 05:00 JST;
+  when it starts, the controller stops this worker first to free VRAM, then resumes it
+  automatically once the cronjob exits.
+- Before starting/switching apps, the controller polls VRAM via `rocm-smi` and force-kills
+  high-VRAM "zombie" processes if VRAM isn't freed within ~60s — so an unexpected external
+  SIGKILL of this worker's `llama-server` process may originate from that VRAM-cleanup logic
+  rather than a bug in this repo.
+- The controller's own docs (`CLAUDE.md`/`README.md` in that repo) still describe the old Python
+  entry point (`poetry run python -u worker.py --llama-server --gpu`); its actual `src/config.ts`
+  has already been updated to run this repo via `npm start`, so trust the code over those docs.
+
 ## Explicitly out of scope for this rewrite
 
 - Non-`llama-server` model backends (in-process `llama.cpp`, `transformers`) — the old worker
