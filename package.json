@@ -23,8 +23,8 @@
 	"dependencies": {
 		"@google-cloud/language": "^7.2.3",
 		"@google-cloud/pubsub": "^5.3.1",
-		"@huggingface/hub": "^2.13.2",
-		"@slack/web-api": "^7.18.0",
+		"@huggingface/hub": "^2.13.3",
+		"@slack/web-api": "^7.19.0",
 		"async-mutex": "^0.5.0",
 		"dotenv": "^17.4.2",
 		"firebase-admin": "^14.1.0",
@@ -32,10 +32,10 @@
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.2",
-		"@types/node": "^26.1.0",
+		"@biomejs/biome": "^2.5.3",
+		"@types/node": "^26.1.1",
 		"tsx": "^4.23.0",
-		"typescript": "7.0.1-rc",
+		"typescript": "7.0.2",
 		"vitest": "^4.1.10"
 	}
 }
