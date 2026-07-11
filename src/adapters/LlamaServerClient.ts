@@ -1,4 +1,8 @@
-import type {GenerationConfig, LlmClient} from '../ports/LlmClient.js';
+import type {
+	GenerateInput,
+	GenerationConfig,
+	LlmClient,
+} from '../ports/LlmClient.js';
 
 export interface LlamaServerClientOptions {
 	readonly baseUrl: string;
@@ -13,6 +17,18 @@ const SAMPLING_PARAMS = {
 	top_k: 30,
 	repeat_penalty: 1.2,
 };
+
+/** Builds the /completion `prompt` field: a plain token array for the
+ * text-only path, or a {prompt_string, multimodal_data} object when images
+ * are attached (llama-server's multimodal prompt shape). */
+function buildPromptField(
+	input: GenerateInput,
+):
+	| readonly number[]
+	| {prompt_string: string; multimodal_data: readonly string[]} {
+	if ('tokenIds' in input) return input.tokenIds;
+	return {prompt_string: input.promptText, multimodal_data: input.images};
+}
 
 async function* readSseLines(
 	body: ReadableStream<Uint8Array>,
@@ -68,13 +84,13 @@ export class LlamaServerClient implements LlmClient {
 	}
 
 	async generate(
-		tokenIds: readonly number[],
+		input: GenerateInput,
 	): Promise<{output: string; config: GenerationConfig}> {
 		const response = await fetch(`${this.options.baseUrl}/completion`, {
 			method: 'POST',
 			headers: {'Content-Type': 'application/json'},
 			body: JSON.stringify({
-				prompt: tokenIds,
+				prompt: buildPromptField(input),
 				n_predict: 200,
 				stop: ['」'],
 				...SAMPLING_PARAMS,
@@ -93,13 +109,13 @@ export class LlamaServerClient implements LlmClient {
 	}
 
 	async *streamGenerate(
-		tokenIds: readonly number[],
+		input: GenerateInput,
 	): AsyncGenerator<string, void, undefined> {
 		const response = await fetch(`${this.options.baseUrl}/completion`, {
 			method: 'POST',
 			headers: {'Content-Type': 'application/json'},
 			body: JSON.stringify({
-				prompt: tokenIds,
+				prompt: buildPromptField(input),
 				n_predict: 200,
 				stream: true,
 				...SAMPLING_PARAMS,

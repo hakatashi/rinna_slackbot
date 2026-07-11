@@ -8,6 +8,7 @@ import {
 } from '../../domain/dispatch/detectPersonas.js';
 import {trimHistory} from '../../domain/dispatch/trimHistory.js';
 import {personaMeta, RINNA_BOT_ID} from '../../domain/personas.js';
+import {selectRecentImageUrls} from '../../domain/prompt/imageAttachments.js';
 import {getTopHumanUsernames} from '../../domain/prompt/topHumanUsernames.js';
 import type {AppDependencies} from '../deps.js';
 import {generateAndPostPersonaResponse} from '../generatePersonaResponse.js';
@@ -51,6 +52,14 @@ export async function signalHandler(
 		return;
 	}
 
+	const imageUrls = selectRecentImageUrls(
+		trimmedMessages,
+		deps.maxRecentImages,
+	);
+	const images = await Promise.all(
+		imageUrls.map((url) => deps.imageDownloader.downloadBase64(url)),
+	);
+
 	let messages: readonly HumanMessage[] = trimmedMessages;
 	const triggeredPersonas = detectTriggeredPersonas(triggerText);
 
@@ -61,6 +70,7 @@ export async function signalHandler(
 				persona,
 				threadTs,
 				deps,
+				images,
 			);
 			messages = [
 				...messages,
@@ -76,6 +86,12 @@ export async function signalHandler(
 		}
 	} else {
 		const fallback = pickFallbackPersona(triggerText, deps.random);
-		await generateAndPostPersonaResponse(messages, fallback, threadTs, deps);
+		await generateAndPostPersonaResponse(
+			messages,
+			fallback,
+			threadTs,
+			deps,
+			images,
+		);
 	}
 }

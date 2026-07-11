@@ -119,4 +119,43 @@ describe('generateAndPostPersonaResponse', () => {
 		expect(result).toBe('');
 		expect(chatPoster.posts).toHaveLength(0);
 	});
+
+	it('generates with promptText+images when images are provided, appending an image marker per image', async () => {
+		const {llm, deps} = createFakeDeps();
+		llm.streamPieces = ['はーい。'];
+
+		const promise = generateAndPostPersonaResponse(
+			messages,
+			'りんな',
+			undefined,
+			deps,
+			['base64img'],
+		);
+		await vi.runAllTimersAsync();
+		await promise;
+
+		const input = llm.receivedInputs[0];
+		expect(input && 'promptText' in input).toBe(true);
+		if (input && 'promptText' in input) {
+			expect(input.images).toEqual(['base64img']);
+			expect(input.promptText).toContain('<__media__>');
+		}
+	});
+
+	it('uses the tokenIds path when no images are provided', async () => {
+		const {llm, deps} = createFakeDeps();
+		llm.streamPieces = ['はーい。'];
+
+		const promise = generateAndPostPersonaResponse(
+			messages,
+			'りんな',
+			undefined,
+			deps,
+		);
+		await vi.runAllTimersAsync();
+		await promise;
+
+		const input = llm.receivedInputs[0];
+		expect(input && 'tokenIds' in input).toBe(true);
+	});
 });

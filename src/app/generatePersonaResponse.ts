@@ -1,6 +1,7 @@
 import type {HumanMessage} from '../contracts/pubsubPayloads.js';
 import {type PersonaId, personaMeta} from '../domain/personas.js';
 import {buildPrompt} from '../domain/prompt/buildPrompt.js';
+import {IMAGE_MEDIA_MARKER} from '../domain/prompt/imageAttachments.js';
 import {SENTENCE_DELIMITERS} from '../domain/sentenceDelimiters.js';
 import {joinChunksToSpeech} from '../domain/speech/normalizeChunk.js';
 import {streamSpeechChunks} from '../domain/speech/streamParser.js';
@@ -72,8 +73,11 @@ export async function generateAndPostPersonaResponse(
 	character: PersonaId,
 	threadTs: string | undefined,
 	deps: AppDependencies,
+	images: readonly string[] = [],
 ): Promise<string> {
 	const personaData = deps.personaData[character];
+	const extraSuffix =
+		images.length > 0 ? IMAGE_MEDIA_MARKER.repeat(images.length) : '';
 	const {tokenIds, textInput, formattedDialog} = await buildPrompt(
 		messages,
 		character,
@@ -81,6 +85,7 @@ export async function generateAndPostPersonaResponse(
 		deps.usernameMapping,
 		(text) => deps.llm.tokenize(text),
 		deps.clock.now(),
+		extraSuffix,
 	);
 
 	if (tokenIds === null) return '';
@@ -96,8 +101,11 @@ export async function generateAndPostPersonaResponse(
 	const allChunks: string[] = [];
 	let firstChunk = true;
 
+	const generateInput =
+		images.length > 0 ? {promptText: textInput, images} : {tokenIds};
+
 	for await (const chunk of streamSpeechChunks(
-		deps.llm.streamGenerate(tokenIds),
+		deps.llm.streamGenerate(generateInput),
 		character,
 	)) {
 		if (chunk.length === 0) continue;

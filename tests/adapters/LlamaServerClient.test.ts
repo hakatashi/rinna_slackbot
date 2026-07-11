@@ -46,7 +46,7 @@ describe('LlamaServerClient.streamGenerate', () => {
 			modelFile: 'f',
 		});
 		const chunks: string[] = [];
-		for await (const piece of client.streamGenerate([1, 2, 3])) {
+		for await (const piece of client.streamGenerate({tokenIds: [1, 2, 3]})) {
 			chunks.push(piece);
 		}
 		expect(chunks.join('')).toBe('おはよう');
@@ -68,7 +68,7 @@ describe('LlamaServerClient.streamGenerate', () => {
 			modelFile: 'f',
 		});
 		const chunks: string[] = [];
-		for await (const piece of client.streamGenerate([1])) {
+		for await (const piece of client.streamGenerate({tokenIds: [1]})) {
 			chunks.push(piece);
 		}
 		expect(chunks.join('')).toBe('おはよう');
@@ -90,7 +90,7 @@ describe('LlamaServerClient.streamGenerate', () => {
 			modelFile: 'f',
 		});
 		const chunks: string[] = [];
-		for await (const piece of client.streamGenerate([1])) {
+		for await (const piece of client.streamGenerate({tokenIds: [1]})) {
 			chunks.push(piece);
 		}
 		// The nested 「入れ子」 pair doesn't trigger the stop; only the final
@@ -112,7 +112,7 @@ describe('LlamaServerClient.streamGenerate', () => {
 			modelName: 'm',
 			modelFile: 'f',
 		});
-		for await (const _piece of client.streamGenerate([7, 8, 9])) {
+		for await (const _piece of client.streamGenerate({tokenIds: [7, 8, 9]})) {
 			// drain
 		}
 
@@ -124,6 +124,35 @@ describe('LlamaServerClient.streamGenerate', () => {
 		expect(parsed.prompt).toEqual([7, 8, 9]);
 		expect(parsed.stream).toBe(true);
 		expect(parsed.temperature).toBe(0.6);
+	});
+
+	it('sends a prompt_string/multimodal_data object when images are attached', async () => {
+		let capturedBody = '';
+		const served = await serveOnce((_path, body) => {
+			capturedBody = body;
+			return {status: 200, body: sseBody([{content: 'ok', stop: true}])};
+		});
+		server = served.server;
+
+		const client = new LlamaServerClient({
+			baseUrl: served.baseUrl,
+			modelName: 'm',
+			modelFile: 'f',
+		});
+		for await (const _piece of client.streamGenerate({
+			promptText: '質問「これは何？」<__media__>',
+			images: ['base64data'],
+		})) {
+			// drain
+		}
+
+		const parsed = JSON.parse(capturedBody) as {
+			prompt: {prompt_string: string; multimodal_data: string[]};
+		};
+		expect(parsed.prompt).toEqual({
+			prompt_string: '質問「これは何？」<__media__>',
+			multimodal_data: ['base64data'],
+		});
 	});
 });
 
@@ -167,7 +196,7 @@ describe('LlamaServerClient.generate', () => {
 			modelName: 'my-model',
 			modelFile: 'f.gguf',
 		});
-		const result = await client.generate([1, 2]);
+		const result = await client.generate({tokenIds: [1, 2]});
 		expect(result.output).toBe('おはよう」');
 		expect(result.config).toEqual({
 			modelProvider: 'llama-server',
@@ -187,6 +216,8 @@ describe('LlamaServerClient.generate', () => {
 			modelName: 'm',
 			modelFile: 'f',
 		});
-		await expect(client.generate([1])).rejects.toThrow('output_text is empty');
+		await expect(client.generate({tokenIds: [1]})).rejects.toThrow(
+			'output_text is empty',
+		);
 	});
 });

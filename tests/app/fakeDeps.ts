@@ -6,7 +6,12 @@ import type {
 	PostMessageParams,
 } from '../../src/ports/ChatPoster.js';
 import type {Clock} from '../../src/ports/Clock.js';
-import type {GenerationConfig, LlmClient} from '../../src/ports/LlmClient.js';
+import type {ImageDownloader} from '../../src/ports/ImageDownloader.js';
+import type {
+	GenerateInput,
+	GenerationConfig,
+	LlmClient,
+} from '../../src/ports/LlmClient.js';
 import type {ModerationResult, Moderator} from '../../src/ports/Moderator.js';
 import type {Publisher} from '../../src/ports/Publisher.js';
 import type {RandomSource} from '../../src/ports/Random.js';
@@ -16,6 +21,7 @@ import type {Thermometer} from '../../src/ports/Thermometer.js';
 export class FakeLlmClient implements LlmClient {
 	streamPieces: string[] = [];
 	generateOutput = 'ダミー」';
+	receivedInputs: GenerateInput[] = [];
 
 	describe(): GenerationConfig {
 		return {modelProvider: 'fake', modelName: 'fake-model'};
@@ -26,17 +32,28 @@ export class FakeLlmClient implements LlmClient {
 	}
 
 	async generate(
-		_tokenIds: readonly number[],
+		input: GenerateInput,
 	): Promise<{output: string; config: GenerationConfig}> {
+		this.receivedInputs.push(input);
 		return {output: this.generateOutput, config: this.describe()};
 	}
 
 	async *streamGenerate(
-		_tokenIds: readonly number[],
+		input: GenerateInput,
 	): AsyncGenerator<string, void, undefined> {
+		this.receivedInputs.push(input);
 		for (const piece of this.streamPieces) {
 			yield piece;
 		}
+	}
+}
+
+export class FakeImageDownloader implements ImageDownloader {
+	downloadedUrls: string[] = [];
+
+	async downloadBase64(url: string): Promise<string> {
+		this.downloadedUrls.push(url);
+		return `base64(${url})`;
 	}
 }
 
@@ -105,6 +122,7 @@ export function fakePersonaData(): Record<PersonaId, PersonaPromptData> {
 export interface FakeDeps {
 	llm: FakeLlmClient;
 	chatPoster: FakeChatPoster;
+	imageDownloader: FakeImageDownloader;
 	moderator: FakeModerator;
 	responseLog: FakeResponseLog;
 	publisher: FakePublisher;
@@ -117,6 +135,7 @@ export function createFakeDeps(
 ): FakeDeps {
 	const llm = new FakeLlmClient();
 	const chatPoster = new FakeChatPoster();
+	const imageDownloader = new FakeImageDownloader();
 	const moderator = new FakeModerator();
 	const responseLog = new FakeResponseLog();
 	const publisher = new FakePublisher();
@@ -125,6 +144,7 @@ export function createFakeDeps(
 	const deps: AppDependencies = {
 		llm,
 		chatPoster,
+		imageDownloader,
 		moderator,
 		responseLog,
 		publisher,
@@ -135,11 +155,13 @@ export function createFakeDeps(
 		usernameMapping: {U1: '博多市', U2: 'ひでお'},
 		sandboxChannel: 'C_TEST',
 		mode: 'CPU',
+		maxRecentImages: 3,
 	};
 
 	return {
 		llm,
 		chatPoster,
+		imageDownloader,
 		moderator,
 		responseLog,
 		publisher,

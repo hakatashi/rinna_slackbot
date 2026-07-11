@@ -6,6 +6,13 @@ import {z} from 'zod';
  * Only the fields worker.py's rinna-signal flow actually reads are required;
  * everything else is optional since Slack payloads carry many unused fields.
  */
+export const slackFileSchema = z.object({
+	url_private: z.string(),
+	mimetype: z.string(),
+});
+
+export type SlackFile = z.infer<typeof slackFileSchema>;
+
 export const humanMessageSchema = z.object({
 	text: z.string().nullable().optional(),
 	ts: z.string(),
@@ -14,6 +21,7 @@ export const humanMessageSchema = z.object({
 	bot_id: z.string().optional(),
 	subtype: z.string().optional(),
 	thread_ts: z.string().optional(),
+	files: z.array(slackFileSchema).optional(),
 });
 
 export type HumanMessage = z.infer<typeof humanMessageSchema>;

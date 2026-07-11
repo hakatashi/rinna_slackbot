@@ -48,7 +48,7 @@ export async function meaningHandler(
 	const textInput = `${meaningIntro}\n${inquiryMessage}\n${responseMessage}`;
 
 	const tokenIds = await deps.llm.tokenize(textInput);
-	const {output} = await deps.llm.generate(tokenIds);
+	const {output} = await deps.llm.generate({tokenIds});
 
 	const rawSpeech = output.split('」')[0] ?? '';
 	const rinnaSpeech = applyRinnaReplacements(rawSpeech, character);

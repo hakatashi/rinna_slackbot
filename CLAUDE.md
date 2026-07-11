@@ -47,7 +47,10 @@ full correspondence table and manual-sync procedure with that sibling repo. In s
 - **`rinna-signal`** fires on an explicit persona mention or an autonomous heuristic (recent
   activity, cooldown, random chance — all decided on the sibling repo's side). Payload:
   `{type: 'rinna-signal', humanMessages, botMessages, lastSignal}`, where `humanMessages` is a
-  15-minute sliding window of Slack messages.
+  15-minute sliding window of Slack messages. `slack.ts` pushes the raw Slack event `message`
+  object into this window with no field-picking, so any `files` (image attachments) Slack sends
+  on a message are already present in the payload today — no sibling-repo change was needed to
+  add vision support, only extending this repo's `humanMessageSchema` to stop discarding `files`.
 - **`rinna-meaning`** fires when TSG slackbot posts a message ending in `わからん`. Payload:
   `{type: 'rinna-meaning', word, ts}`.
 - **`rinna-temperature`** fires on any message with text `うなの体温`.
@@ -79,7 +82,18 @@ speech, and moderation results.
 - `prompt/buildPrompt.ts` — builds the "intro + dialogue so far" prompt for a persona, growing the
   included history one message at a time (newest-first) until the token budget
   (`MAX_PROMPT_TOKENS=11500`, `MAX_HISTORY_TOKENS=2000`) would be exceeded, then keeping the last
-  window that fit. Takes an injected `tokenize` function so it never touches the network.
+  window that fit. Takes an injected `tokenize` function so it never touches the network. Also
+  takes an optional `extraSuffix` string, inserted right before the persona's speech-opening 「 —
+  used to attach image markers (see `prompt/imageAttachments.ts` below) without buildPrompt itself
+  knowing anything about images.
+- `prompt/imageAttachments.ts` — `selectRecentImageUrls` scans a message window for `files` with an
+  `image/*` mimetype and keeps only the most recent `maxImages` (the count comes from
+  `AppDependencies.maxRecentImages`, sourced from `MAX_RECENT_IMAGES`, default 3), returned oldest
+  kept image first. `IMAGE_MEDIA_MARKER = '<__media__>'` is llama.cpp's mtmd marker string; note
+  that image markers can **not** be embedded directly into a message's own `.text` because
+  `normalizeText` (used when formatting dialogue) strips any `<...>` tag (it exists to strip
+  Slack's `<@mention>`/`<#channel>`/`<url>` syntax) — that's why marker insertion happens via
+  buildPrompt's `extraSuffix` instead, applied once per generation rather than per-message.
 - `speech/streamParser.ts` — consumes raw LLM text pieces and yields complete sentences as their
   delimiter is confirmed (not mid-run of `！？`, not inside a bracket/quote).
 - `speech/splitChunks.ts` — the non-streaming counterpart, used by the `@うな先生` meaning flow.
@@ -90,15 +104,32 @@ speech, and moderation results.
 
 ### Ports (`src/ports/`) and adapters (`src/adapters/`)
 
-`LlmClient`, `ChatPoster`, `Moderator`, `ResponseLog`, `MessageSource`/`Publisher`, `Thermometer`,
-`Clock`, `Random` are the interfaces `app/` handlers depend on. Concrete implementations:
+`LlmClient`, `ChatPoster`, `ImageDownloader`, `Moderator`, `ResponseLog`, `MessageSource`/`Publisher`,
+`Thermometer`, `Clock`, `Random` are the interfaces `app/` handlers depend on. Concrete
+implementations:
 
 - `LlamaServerClient` + `llamaServerProcess.ts` — spawns and health-checks the `llama-server`
   binary (path from `LLAMA_SERVER_BINARY`, default `~/Documents/GitHub/llama.cpp/build/bin/llama-server`),
   then talks to it over HTTP. `streamGenerate` tracks `「`/`」` nesting depth itself to stop
   generation exactly at the outer speech's closing bracket, without cutting off a quoted word
-  inside the speech.
-- `modelDownloader.ts` — pulls the GGUF from Hugging Face Hub via `@huggingface/hub`.
+  inside the speech. `llamaServerProcess.ts` always starts the binary with `--mmproj` (path from
+  `MMPROJ_FILE`, downloaded from the same `MODEL_REPO`), so vision is loaded unconditionally —
+  this costs ~3GB of idle VRAM even for text-only replies. `LlmClient.generate`/`streamGenerate`
+  take a `GenerateInput` union: `{tokenIds}` for the normal pre-tokenized text path, or
+  `{promptText, images}` (base64 strings) for llama-server's multimodal `/completion` shape
+  (`prompt: {prompt_string, multimodal_data}` — the current llama.cpp server API, not the older
+  `image_data` field some docs still reference). Marker count in `prompt_string` and
+  `multimodal_data.length` must match exactly or the server 500s.
+- `modelDownloader.ts` — pulls the GGUF (and the mmproj file) from Hugging Face Hub via
+  `@huggingface/hub`.
+- `SlackImageDownloader` — downloads a Slack `url_private` with `Authorization: Bearer
+  <SLACK_TOKEN>` (Slack's Web API has no RPC for file bytes, so this is a plain `fetch`, unlike
+  `SlackChatPoster`'s use of `@slack/web-api`'s `WebClient`), then re-encodes with `sharp`: EXIF
+  auto-rotate, downscale to fit inside `MAX_IMAGE_DIMENSION=2048` per side (keeps
+  width×height under llama.cpp mtmd's `image_max_pixels` hparam for this model), re-encoded as
+  JPEG. This also sidesteps format edge cases (CMYK JPEGs, animated GIFs, etc.) that llama.cpp's
+  `stb_image`-based decoder rejects with `"failed to process image"` — real-world Slack uploads
+  hit this more often than the pixel-count limit alone would suggest.
 - `SlackChatPoster`, `GoogleLanguageModerator`, `AzureContentModerator` (+ `ParallelModerator` to
   run both concurrently), `FirestoreResponseLog`, `PubSubClient`, `RocmSmiThermometer`.
 
@@ -107,7 +138,11 @@ speech, and moderation results.
 - `handlers/signalHandler.ts` — the core chat flow: thread-reply logic for stale triggers,
   `/clear`/`/no_clear`, then either the `@うな先生` meaning flow or firing each mentioned persona
   in turn (each one's reply is appended to the running history before the next persona generates,
-  so multiple personas mentioned in one message "see" each other's replies).
+  so multiple personas mentioned in one message "see" each other's replies). Also selects and
+  downloads (via `ImageDownloader`) the most recent `maxRecentImages` Slack images from the
+  window once per signal, before the persona loop, so every persona mentioned by the same message
+  sees the same images (the `@うな先生` meaning flow doesn't get images — `rinna-meaning`'s payload
+  carries only `{word, ts}`, no message history).
 - `handlers/meaningHandler.ts` — the `@うな先生` / `rinna-meaning` flow. Always sleeps 1s before
   posting every chunk, including the first (unlike the persona-response flow, which skips the
   sleep before its first chunk).

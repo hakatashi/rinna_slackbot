@@ -103,6 +103,9 @@ export async function buildPrompt(
 	usernameMapping: Record<string, string>,
 	tokenize: Tokenize,
 	now: Date,
+	/** Appended right before the persona's speech-opening 「, e.g. image
+	 * markers for attached images. Opaque to buildPrompt itself. */
+	extraSuffix = '',
 ): Promise<BuildPromptResult> {
 	const meta = personaMeta[character];
 	const lastMessage = messages.at(-1);
@@ -119,7 +122,7 @@ export async function buildPrompt(
 			user2,
 		);
 		const formattedDialog = `質問「${lastMessageText}」`;
-		const textInput = `${inquiryIntro}\n${formattedDialog}\n回答「`;
+		const textInput = `${inquiryIntro}\n${formattedDialog}${extraSuffix}\n回答「`;
 		const tokenIds = await tokenize(textInput);
 		return {tokenIds, textInput, formattedDialog};
 	}
@@ -143,7 +146,7 @@ export async function buildPrompt(
 		window.unshift(message);
 		formattedDialog = window.map(formatMessage).join('\n');
 		const candidateText = substituteDatePlaceholders(
-			`${intro}\n${formattedDialog}${outro}`,
+			`${intro}\n${formattedDialog}${extraSuffix}${outro}`,
 			now,
 		);
 
