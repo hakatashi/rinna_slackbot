@@ -50,6 +50,19 @@ export class LlamaServerProcess {
 				String(this.options.contextSize),
 				'-ngl',
 				this.options.gpuMode ? '-1' : '0',
+				// mutex.ts already serializes all generation to one request at a
+				// time, so extra parallel slots only waste VRAM. More importantly,
+				// llama-server's cross-request KV/prompt-reuse caching (both the
+				// classic per-slot prefix cache and the newer --cache-ram
+				// checkpoint cache) is a suspected cause of intermittent
+				// "failed to process image" 500s once a slot has processed a
+				// multimodal prompt — we never need reuse since buildPrompt always
+				// sends a fresh full prompt, so it's disabled outright.
+				'--parallel',
+				'1',
+				'--no-cache-prompt',
+				'--cache-ram',
+				'0',
 			],
 			{detached: true, stdio: ['ignore', 'pipe', 'pipe']},
 		);

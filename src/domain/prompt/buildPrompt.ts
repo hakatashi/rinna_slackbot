@@ -32,6 +32,14 @@ export interface BuildPromptResult {
 
 export type Tokenize = (text: string) => Promise<readonly number[]>;
 
+/** A trigger message ending in ？/? gets the "quick inquiry" prompt shape
+ * (only the trigger message itself, no history). Exported so callers that
+ * need to know this ahead of buildPrompt (e.g. deciding which messages'
+ * image attachments are even in scope) can replicate the same rule. */
+export function isInquiryText(text: string): boolean {
+	return text.endsWith('？') || text.endsWith('?');
+}
+
 function resolveSpeakerName(
 	message: HumanMessage,
 	usernameMapping: Record<string, string>,
@@ -110,8 +118,7 @@ export async function buildPrompt(
 	const meta = personaMeta[character];
 	const lastMessage = messages.at(-1);
 	const lastMessageText = lastMessage?.text ?? '';
-	const isInquiry =
-		lastMessageText.endsWith('？') || lastMessageText.endsWith('?');
+	const isInquiry = isInquiryText(lastMessageText);
 
 	const [user1, user2] = getTopHumanUsernames(messages, usernameMapping);
 

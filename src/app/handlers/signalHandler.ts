@@ -8,6 +8,7 @@ import {
 } from '../../domain/dispatch/detectPersonas.js';
 import {trimHistory} from '../../domain/dispatch/trimHistory.js';
 import {personaMeta, RINNA_BOT_ID} from '../../domain/personas.js';
+import {isInquiryText} from '../../domain/prompt/buildPrompt.js';
 import {selectRecentImageUrls} from '../../domain/prompt/imageAttachments.js';
 import {getTopHumanUsernames} from '../../domain/prompt/topHumanUsernames.js';
 import type {AppDependencies} from '../deps.js';
@@ -52,8 +53,15 @@ export async function signalHandler(
 		return;
 	}
 
+	// Inquiry-mode replies ("うな、○○？") only ever look at the trigger message
+	// itself (see buildPrompt's isInquiry branch), so image selection must be
+	// scoped the same way — otherwise an unrelated image from earlier in the
+	// 15-minute window would get attached to a plain-text question.
+	const imageSourceMessages = isInquiryText(triggerText)
+		? [triggerMessage]
+		: trimmedMessages;
 	const imageUrls = selectRecentImageUrls(
-		trimmedMessages,
+		imageSourceMessages,
 		deps.maxRecentImages,
 	);
 	const images = await Promise.all(
