@@ -106,6 +106,21 @@ describe('buildPrompt', () => {
 		expect(result.textInput).toBe('質問イントロ\n質問「今何時？」\n回答「');
 	});
 
+	it('normalizes the trigger message text in the inquiry branch, same as the normal dialogue path', async () => {
+		const messages: HumanMessage[] = [
+			{text: '@りんな 」ウナは「元気」と言った？', user: 'U1', ts: '1'},
+		];
+		const result = await buildPrompt(
+			messages,
+			'りんな',
+			{intro: 'イントロ', inquiryIntro: '質問イントロ'},
+			usernameMapping,
+			fakeTokenize,
+			now,
+		);
+		expect(result.formattedDialog).toBe('質問「ウナは『元気』と言った？」');
+	});
+
 	it('does not take the inquiry branch when no inquiryIntro is configured, even for a question', async () => {
 		const messages: HumanMessage[] = [{text: '今何時？', user: 'U1', ts: '1'}];
 		const result = await buildPrompt(
