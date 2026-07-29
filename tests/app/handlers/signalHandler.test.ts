@@ -277,4 +277,56 @@ describe('signalHandler', () => {
 			'https://slack/4.png',
 		]);
 	});
+
+	it('does not attach images from earlier history to an inquiry-mode message', async () => {
+		const {llm, imageDownloader, deps} = createFakeDeps(NOW);
+		llm.streamPieces = ['はーい。'];
+		const baseTs = NOW.getTime() / 1000;
+
+		const promise = signalHandler(
+			signal([
+				{
+					text: 'これ見て',
+					user: 'U1',
+					ts: String(baseTs - 10),
+					files: [
+						{url_private: 'https://slack/old.png', mimetype: 'image/png'},
+					],
+				},
+				{
+					text: 'りんな、これ何？',
+					user: 'U1',
+					ts: String(baseTs),
+				},
+			]),
+			deps,
+		);
+		await vi.runAllTimersAsync();
+		await promise;
+
+		expect(imageDownloader.downloadedUrls).toHaveLength(0);
+	});
+
+	it('still attaches an image that is on the inquiry trigger message itself', async () => {
+		const {llm, imageDownloader, deps} = createFakeDeps(NOW);
+		llm.streamPieces = ['はーい。'];
+
+		const promise = signalHandler(
+			signal([
+				{
+					text: 'りんな、これ何？',
+					user: 'U1',
+					ts: String(NOW.getTime() / 1000),
+					files: [
+						{url_private: 'https://slack/new.png', mimetype: 'image/png'},
+					],
+				},
+			]),
+			deps,
+		);
+		await vi.runAllTimersAsync();
+		await promise;
+
+		expect(imageDownloader.downloadedUrls).toEqual(['https://slack/new.png']);
+	});
 });

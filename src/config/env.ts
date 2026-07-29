@@ -28,7 +28,7 @@ const envSchema = z.object({
 	MODEL_REPO: z.string().default('mradermacher/Qwen3.5-35B-A3B-Base-GGUF'),
 	MODEL_FILE: z.string().default('Qwen3.5-35B-A3B-Base.Q6_K.gguf'),
 	MMPROJ_FILE: z.string().default('Qwen3.5-35B-A3B-Base.mmproj-Q8_0.gguf'),
-	MAX_RECENT_IMAGES: z.coerce.number().int().default(3),
+	MAX_RECENT_IMAGES: z.coerce.number().int().default(1),
 
 	DATA_DIR: z.string().default('data'),
 });

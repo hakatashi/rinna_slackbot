@@ -119,7 +119,16 @@ implementations:
   `{promptText, images}` (base64 strings) for llama-server's multimodal `/completion` shape
   (`prompt: {prompt_string, multimodal_data}` — the current llama.cpp server API, not the older
   `image_data` field some docs still reference). Marker count in `prompt_string` and
-  `multimodal_data.length` must match exactly or the server 500s.
+  `multimodal_data.length` must match exactly or the server 500s. `llamaServerProcess.ts` also
+  passes `--parallel 1 --no-cache-prompt --cache-ram 0`: `mutex.ts` already serializes all
+  generation to one request at a time so extra slots only waste VRAM, and llama-server's
+  cross-request prompt/KV-cache reuse (both the classic per-slot prefix cache and the newer
+  `--cache-ram` checkpoint cache from
+  [PR #16391](https://github.com/ggml-org/llama.cpp/pull/16391)) is the leading suspect for
+  intermittent `"failed to process image"` 500s that only start appearing after a slot has
+  already processed one multimodal prompt — not conclusively confirmed (couldn't reproduce it
+  directly), but disabling it costs nothing since buildPrompt always sends a fresh full prompt
+  anyway.
 - `modelDownloader.ts` — pulls the GGUF (and the mmproj file) from Hugging Face Hub via
   `@huggingface/hub`.
 - `SlackImageDownloader` — downloads a Slack `url_private` with `Authorization: Bearer
@@ -139,10 +148,15 @@ implementations:
   `/clear`/`/no_clear`, then either the `@うな先生` meaning flow or firing each mentioned persona
   in turn (each one's reply is appended to the running history before the next persona generates,
   so multiple personas mentioned in one message "see" each other's replies). Also selects and
-  downloads (via `ImageDownloader`) the most recent `maxRecentImages` Slack images from the
-  window once per signal, before the persona loop, so every persona mentioned by the same message
-  sees the same images (the `@うな先生` meaning flow doesn't get images — `rinna-meaning`'s payload
-  carries only `{word, ts}`, no message history).
+  downloads (via `ImageDownloader`) the most recent `maxRecentImages` Slack images once per signal,
+  before the persona loop, so every persona mentioned by the same message sees the same images
+  (the `@うな先生` meaning flow doesn't get images — `rinna-meaning`'s payload carries only
+  `{word, ts}`, no message history). Image *source* scope depends on `isInquiryText(triggerText)`
+  (re-exported from `buildPrompt.ts`): a plain-text trigger scans the whole trimmed window (up to
+  `maxRecentImages`, newest first), but an inquiry-mode trigger ("うな、○○？") scans only the
+  trigger message itself — this mirrors buildPrompt's own isInquiry branch, which likewise ignores
+  all history and answers from the trigger message alone, so an unrelated image posted earlier in
+  the 15-minute window must not leak into an inquiry answer that isn't about it.
 - `handlers/meaningHandler.ts` — the `@うな先生` / `rinna-meaning` flow. Always sleeps 1s before
   posting every chunk, including the first (unlike the persona-response flow, which skips the
   sleep before its first chunk).
