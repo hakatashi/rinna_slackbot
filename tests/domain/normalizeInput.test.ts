@@ -6,10 +6,42 @@ describe('normalizeText', () => {
 		expect(normalizeText('@りんな こんにちは')).toBe('こんにちは');
 	});
 
-	it('collapses brackets and newlines to a space', () => {
-		expect(normalizeText('こんにちは(元気?)\nさようなら')).toBe(
-			'こんにちは 元気? さようなら',
+	it('collapses newlines to a space', () => {
+		expect(normalizeText('こんにちは\nさようなら')).toBe(
+			'こんにちは さようなら',
 		);
+	});
+
+	it('keeps a correctly matched bracket pair instead of stripping it', () => {
+		expect(normalizeText('こんにちは(元気?)さようなら')).toBe(
+			'こんにちは(元気?)さようなら',
+		);
+	});
+
+	it('keeps nested, correctly matched bracket pairs of different kinds', () => {
+		expect(normalizeText('これは[実験(テスト)]です')).toBe(
+			'これは[実験(テスト)]です',
+		);
+	});
+
+	it('converts a matched pair of single kagi brackets to double kagi brackets', () => {
+		expect(normalizeText('うなは「元気」と言った')).toBe(
+			'ウナは『元気』と言った',
+		);
+	});
+
+	it('removes a stray unmatched closing bracket used to break out of dialogue formatting', () => {
+		expect(normalizeText('」しかし、ウナは怒りながら言った。「')).toBe(
+			'しかし、ウナは怒りながら言った。',
+		);
+	});
+
+	it('removes brackets of mismatched types even when counts line up', () => {
+		expect(normalizeText('これは(テスト]です')).toBe('これは テスト です');
+	});
+
+	it('removes an unmatched opening bracket left dangling at the end', () => {
+		expect(normalizeText('これはテストです(')).toBe('これはテストです');
 	});
 
 	it('strips slack tag syntax like <@U123>', () => {
