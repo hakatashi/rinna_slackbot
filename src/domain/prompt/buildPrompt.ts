@@ -128,7 +128,7 @@ export async function buildPrompt(
 			user1,
 			user2,
 		);
-		const formattedDialog = `質問「${lastMessageText}」`;
+		const formattedDialog = `質問「${normalizeText(lastMessageText)}」`;
 		const textInput = `${inquiryIntro}\n${formattedDialog}${extraSuffix}\n回答「`;
 		const tokenIds = await tokenize(textInput);
 		return {tokenIds, textInput, formattedDialog};
