@@ -32,6 +32,13 @@ export async function signalHandler(
 	const triggerMessage = payload.humanMessages.at(-1);
 	if (triggerMessage === undefined) return;
 
+	if (
+		triggerMessage.user !== undefined &&
+		deps.ignoredUsers.includes(triggerMessage.user)
+	) {
+		return;
+	}
+
 	const triggerTs = Number.parseFloat(triggerMessage.ts);
 	const nowTsSeconds = deps.clock.now().getTime() / 1000;
 	const threadTs =

@@ -31,6 +31,16 @@ const envSchema = z.object({
 	MAX_RECENT_IMAGES: z.coerce.number().int().default(1),
 
 	DATA_DIR: z.string().default('data'),
+
+	IGNORED_USERS: z
+		.string()
+		.default('')
+		.transform((value) =>
+			value
+				.split(',')
+				.map((u) => u.trim())
+				.filter((u) => u !== ''),
+		),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -28,4 +28,6 @@ export interface AppDependencies {
 	readonly mode: string;
 	/** Cap on how many recent Slack image attachments to send per generation. */
 	readonly maxRecentImages: number;
+	/** List of user IDs to ignore from being triggers. */
+	readonly ignoredUsers: readonly string[];
 }

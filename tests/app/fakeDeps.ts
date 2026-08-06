@@ -132,6 +132,7 @@ export interface FakeDeps {
 
 export function createFakeDeps(
 	now: Date = new Date(2026, 0, 5, 12, 0),
+	ignoredUsers: readonly string[] = [],
 ): FakeDeps {
 	const llm = new FakeLlmClient();
 	const chatPoster = new FakeChatPoster();
@@ -156,6 +157,7 @@ export function createFakeDeps(
 		sandboxChannel: 'C_TEST',
 		mode: 'CPU',
 		maxRecentImages: 3,
+		ignoredUsers,
 	};
 
 	return {

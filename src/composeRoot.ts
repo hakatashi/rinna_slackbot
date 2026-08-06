@@ -100,6 +100,7 @@ export async function composeApp(env: Env): Promise<ComposedApp> {
 		sandboxChannel: env.SANDBOX_CHANNEL_ID,
 		mode: env.LLAMA_GPU ? 'GPU' : 'CPU',
 		maxRecentImages: env.MAX_RECENT_IMAGES,
+		ignoredUsers: env.IGNORED_USERS,
 	};
 
 	const route = createRouter(deps);

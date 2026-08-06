@@ -329,4 +329,23 @@ describe('signalHandler', () => {
 
 		expect(imageDownloader.downloadedUrls).toEqual(['https://slack/new.png']);
 	});
+
+	it('ignores trigger messages from users in the ignoredUsers list', async () => {
+		const {chatPoster, deps} = createFakeDeps(NOW, ['U_IGNORED']);
+
+		const promise = signalHandler(
+			signal([
+				{
+					text: 'りんな、こんにちは',
+					user: 'U_IGNORED',
+					ts: String(NOW.getTime() / 1000),
+				},
+			]),
+			deps,
+		);
+		await vi.runAllTimersAsync();
+		await promise;
+
+		expect(chatPoster.posts).toHaveLength(0);
+	});
 });
