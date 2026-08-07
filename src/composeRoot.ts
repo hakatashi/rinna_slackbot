@@ -1,3 +1,4 @@
+import path from 'node:path';
 import {initializeApp} from 'firebase-admin/app';
 import {getFirestore} from 'firebase-admin/firestore';
 import {AzureContentModerator} from './adapters/AzureContentModerator.js';
@@ -38,14 +39,23 @@ function systemRandom(): RandomSource {
  * llama-server, wires up Slack/Firestore/Pub/Sub/moderation clients, and
  * assembles the AppDependencies bag + router used by main.ts. */
 export async function composeApp(env: Env): Promise<ComposedApp> {
-	const modelPath = await downloadModel(
-		{repo: env.MODEL_REPO, file: env.MODEL_FILE},
-		env.HUGGINGFACE_TOKEN,
-	);
-	const mmprojPath = await downloadModel(
-		{repo: env.MODEL_REPO, file: env.MMPROJ_FILE},
-		env.HUGGINGFACE_TOKEN,
-	);
+	const modelPath =
+		env.MODEL_PATH ??
+		(await downloadModel(
+			{repo: env.MODEL_REPO, file: env.MODEL_FILE},
+			env.HUGGINGFACE_TOKEN,
+		));
+	// A text-only model (PLaMo 3 and friends) has no mmproj to configure at all.
+	// llama-server then starts without --mmproj, and maxRecentImages below is
+	// forced to 0 so no prompt can carry an image marker it couldn't process.
+	const mmprojPath =
+		env.MMPROJ_PATH ??
+		(env.MMPROJ_FILE === ''
+			? undefined
+			: await downloadModel(
+					{repo: env.MODEL_REPO, file: env.MMPROJ_FILE},
+					env.HUGGINGFACE_TOKEN,
+				));
 
 	const llamaServerProcess = new LlamaServerProcess({
 		binaryPath: env.LLAMA_SERVER_BINARY,
@@ -60,8 +70,16 @@ export async function composeApp(env: Env): Promise<ComposedApp> {
 
 	const llm = new LlamaServerClient({
 		baseUrl: llamaServerProcess.baseUrl,
-		modelName: env.MODEL_REPO,
-		modelFile: env.MODEL_FILE,
+		// Logged to rinna-responses as "<modelName>/<modelFile>"; a local model
+		// has no repo, so its own path stands in for both halves.
+		modelName:
+			env.MODEL_PATH === undefined
+				? env.MODEL_REPO
+				: path.dirname(env.MODEL_PATH),
+		modelFile:
+			env.MODEL_PATH === undefined
+				? env.MODEL_FILE
+				: path.basename(env.MODEL_PATH),
 	});
 
 	const {personaData, usernameMapping} = await loadPersonaData(env.DATA_DIR);
@@ -99,7 +117,7 @@ export async function composeApp(env: Env): Promise<ComposedApp> {
 		usernameMapping,
 		sandboxChannel: env.SANDBOX_CHANNEL_ID,
 		mode: env.LLAMA_GPU ? 'GPU' : 'CPU',
-		maxRecentImages: env.MAX_RECENT_IMAGES,
+		maxRecentImages: mmprojPath === undefined ? 0 : env.MAX_RECENT_IMAGES,
 		ignoredUsers: env.IGNORED_USERS,
 	};
 

@@ -4,7 +4,8 @@ import {existsSync} from 'node:fs';
 export interface LlamaServerProcessOptions {
 	readonly binaryPath: string;
 	readonly modelPath: string;
-	readonly mmprojPath: string;
+	/** Omitted for text-only models, which have no mmproj to load. */
+	readonly mmprojPath: string | undefined;
 	readonly host: string;
 	readonly port: number;
 	readonly contextSize: number;
@@ -40,8 +41,9 @@ export class LlamaServerProcess {
 			[
 				'-m',
 				this.options.modelPath,
-				'--mmproj',
-				this.options.mmprojPath,
+				...(this.options.mmprojPath === undefined
+					? []
+					: ['--mmproj', this.options.mmprojPath]),
 				'--host',
 				this.options.host,
 				'--port',

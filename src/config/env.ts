@@ -28,6 +28,12 @@ const envSchema = z.object({
 	MODEL_REPO: z.string().default('mradermacher/Qwen3.5-35B-A3B-Base-GGUF'),
 	MODEL_FILE: z.string().default('Qwen3.5-35B-A3B-Base.Q6_K.gguf'),
 	MMPROJ_FILE: z.string().default('Qwen3.5-35B-A3B-Base.mmproj-Q8_0.gguf'),
+	/** Local .gguf path, used instead of downloading MODEL_FILE from
+	 * MODEL_REPO — for models quantized here that aren't published to the Hub. */
+	MODEL_PATH: z.string().optional(),
+	/** The MODEL_PATH counterpart of MMPROJ_FILE. Leaving both this and
+	 * MMPROJ_FILE empty configures no mmproj at all, i.e. a text-only model. */
+	MMPROJ_PATH: z.string().optional(),
 	MAX_RECENT_IMAGES: z.coerce.number().int().default(1),
 
 	DATA_DIR: z.string().default('data'),

@@ -68,6 +68,16 @@ describe('selectRecentImageUrls', () => {
 		]);
 	});
 
+	it('attaches nothing at maxImages 0', () => {
+		// How composeRoot disables vision for a text-only model with no mmproj:
+		// llama-server would 500 on a prompt marker it can't process.
+		const messages = [
+			msg('1', '10', [{url_private: 'img1', mimetype: 'image/png'}]),
+			msg('2', '20', [{url_private: 'img2', mimetype: 'image/png'}]),
+		];
+		expect(selectRecentImageUrls(messages, 0)).toEqual([]);
+	});
+
 	it('collects multiple images from a single message', () => {
 		const messages = [
 			msg('multi', '1', [
