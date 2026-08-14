@@ -21,7 +21,7 @@
 		"check:intro": "tsx scripts/checkIntroTokens.ts"
 	},
 	"dependencies": {
-		"@google-cloud/language": "^7.2.3",
+		"@google-cloud/language": "^8.0.0",
 		"@google-cloud/pubsub": "^6.0.0",
 		"@huggingface/hub": "^2.15.0",
 		"@slack/web-api": "^8.0.0",
